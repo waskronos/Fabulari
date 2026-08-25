@@ -6,7 +6,9 @@ export class User {
     private http = inject(HttpClient);
 
     registerUser(user: object){
-    return this.http.post('http://localhost:3000/api/users', user);
-}   
+    return this.http.post('http://localhost:3000/api/users', user);}
+
+    loginUser(credentials: object){
+    return this.http.post('http://localhost:3000/api/login', credentials);}
 }
 

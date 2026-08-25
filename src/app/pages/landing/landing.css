@@ -1,0 +1,40 @@
+.welcome {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: #0f1117;
+  font-family: Arial, sans-serif;
+}
+
+.welcome-card {
+  text-align: center;
+  padding: 48px;
+}
+
+.eyebrow {
+  margin-bottom: 10px;
+  font-size: 13px;
+  letter-spacing: 4px;
+  color: #8b8fa3;
+}
+
+h1 {
+  margin: 0;
+  font-size: 64px;
+  color: white;
+}
+
+.tagline {
+  margin: 16px 0 30px;
+  font-size: 18px;
+  color: #aeb2c0;
+}
+
+button {
+  padding: 12px 24px;
+  border: none;
+  border-radius: 8px;
+  font-size: 15px;
+  cursor: pointer;
+}

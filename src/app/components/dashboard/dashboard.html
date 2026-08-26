@@ -1,10 +1,12 @@
-<div>
+<div class="dashboard">
 
   @if (currentuser) {
 
     <h1>Welcome, {{ currentuser.firstName }}</h1>
     <p>Logged in as: {{ currentuser.username }}</p>
     <p>Role: {{ currentuser.role }}</p>
+
+    <button (click)="logout()">Logout</button>
 
 
     @if (currentuser.role === 'superAdmin') {
@@ -45,28 +47,49 @@
       <button>Manage Users</button>
 
 
-    } @else if (currentuser.role === 'groupAdmin') {
+} @else if (currentuser.role === 'groupAdmin') {
 
-      <h2>Group Admin</h2>
+  <h2>Group Admin</h2>
 
-      <button>Manage Group</button>
-      <button>Create Room</button>
-      <button>Manage Members</button>
+  <h3>Create Room</h3>
 
+  <label>Group</label>
 
+  <select [(ngModel)]="selectedGroupTitle">
+
+    <option value="">Select Group</option>
+
+    @for (group of groups(); track $index) {
+
+      @if (group.admin === currentuser.username) {
+        <option [value]="group.title">
+          {{ group.title }}
+        </option>
+      }
+
+    }
+
+  </select>
+
+  <label>Room Name</label>
+
+  <input type="text" [(ngModel)]="channelName"/>
+
+  <label>Minimum Age</label>
+
+  <input type="number" [(ngModel)]="channelMinimumAge"/>
+
+    <button (click)="createChannel()">Create Room
+    </button>
     } @else {
 
       <h2>User</h2>
-
-      <button>Browse Groups</button>
-      <button>Request New Room</button>
-
     }
 
 
     <h2>Groups</h2>
 
-    @for (group of groups; track $index) {
+    @for (group of groups(); track $index) {
 
       <div class="group-card">
 
@@ -92,25 +115,71 @@
 
           } @else {
 
-            <button (click)="requestJoin(group)">Request to Join            </button>
+            <button (click)="requestJoin(group)">
+              Request to Join
+            </button>
+
           }
         }
 
         @if (
-          currentuser.role === 'groupAdmin' && group.admin === currentuser.username) {
+          currentuser.role === 'groupAdmin' &&
+          group.admin === currentuser.username
+        ) {
 
           <h4>Join Requests</h4>
 
           @for (username of group.joinRequests; track $index) {
             <p>
               {{ username }}
-              <button (click)="approveJoin(group, username)">Approve</button>
+
+              <button (click)="approveJoin(group, username)">
+                Approve
+              </button>
             </p>
 
           } @empty {
             <p>No pending join requests.</p>
           }
         }
+
+        @if (
+          currentuser.role !== 'superAdmin' &&
+          group.members.includes(currentuser.username)
+        ) {
+
+          <h4>Rooms</h4>
+
+          @for (channel of getChannelsForGroup(group.title); track $index) {
+
+            @if (currentuser.age >= channel.minimumAge) {
+
+              <div class="channel-card">
+
+                <strong>{{ channel.name }}</strong>
+
+                <p>
+                  Minimum Age: {{ channel.minimumAge }}
+                </p>
+
+              </div>
+
+            } @else {
+
+              <p>
+                {{ channel.name }} - Age restricted
+              </p>
+
+            }
+
+          } @empty {
+
+            <p>No rooms available.</p>
+
+          }
+
+        }
+
       </div>
 
     } @empty {

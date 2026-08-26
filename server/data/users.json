@@ -2,19 +2,28 @@
   {
     "username": "hello",
     "firstName": "agam",
-    "lastName": "preet",
-    "email": "aa@gmail.com",
+    "lastName": "singh",
+    "email": "ex@ex.com",
     "age": 22,
-    "password": "$2b$10$4ud/mtvlpTM.QL9jAPUtjeo0IbCGs3iwgG99NcMGFtvrjGURERYCS",
+    "password": "$2b$10$Na7aNFb9sX930D5NcJY45e2nnkh/xkT5p2ZZh/72t/d5u/cktsfv6",
     "role": "superAdmin"
   },
   {
-    "username": "hellos",
+    "username": "hello1",
     "firstName": "agam",
-    "lastName": "preet",
-    "email": "aa@gmail.com",
+    "lastName": "singh",
+    "email": "ex1@ex.com",
     "age": 22,
-    "password": "$2b$10$4ud/mtvlpTM.QL9jAPUtjeo0IbCGs3iwgG99NcMGFtvrjGURERYCS",
+    "password": "$2b$10$v/LFqTHkhPCQaV9VTcB5c.3d9MRtOYCqjuirXrt8vmx5U5EQhJDLm",
     "role": "groupAdmin"
+  },
+  {
+    "username": "hello2",
+    "firstName": "agam",
+    "lastName": "sin",
+    "email": "exx@ex.com",
+    "age": 19,
+    "password": "$2b$10$W1SEIIkGZR0YgypqNp8EIOppYUjtZelGK5EllvSjUC110aPs7VBgW",
+    "role": "user"
   }
 ]

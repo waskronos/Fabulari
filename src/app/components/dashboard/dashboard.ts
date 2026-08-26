@@ -1,4 +1,4 @@
-import { Component, OnInit, inject } from '@angular/core';
+import { Component, OnInit, inject, signal } from '@angular/core';
 import { Router } from '@angular/router';
 import {FormsModule} from '@angular/forms';
 import { Group } from '../../services/group';
@@ -18,6 +18,7 @@ export class Dashboard implements OnInit {
     if (storedUser) {
       this.currentuser = JSON.parse(storedUser);
       this.loadGroups(); 
+      this.loadChannels();
     } else {
       this.router.navigate(['/login']);
     }
@@ -27,6 +28,10 @@ export class Dashboard implements OnInit {
   groupDescription: string = '';
   minimumAge: number | null = null;
   groupAdmin: string = '';
+
+  channelName: string = '';
+  channelMinimumAge: number | null = null;
+  selectedGroupTitle: string = '';
 
   private groupService = inject(Group);
 
@@ -41,6 +46,7 @@ export class Dashboard implements OnInit {
     this.groupService.createGroup(group).subscribe({
       next: (response) => {
         console.log('Group created successfully:', response);
+        this.loadGroups();
       },
       error: (error) => {
         console.error('Error creating group:', error);
@@ -48,11 +54,11 @@ export class Dashboard implements OnInit {
     });
   }
 
-  groups: any[] = [];
+  groups= signal<any[]>([]);
   loadGroups(){
     this.groupService.getGroup().subscribe({
       next: (response) => {
-        this.groups = response;
+        this.groups.set(response);
         console.log('Groups loaded successfully:', response);
       },
       error: (error) => {
@@ -65,6 +71,7 @@ export class Dashboard implements OnInit {
     this.groupService.requestJoin(group.title, this.currentuser.username).subscribe({
       next: (response) => {
         console.log('Join request sent successfully:', response);
+        this.loadGroups();
       },
       error: (error) => {
         console.error('Error sending join request:', error);
@@ -76,10 +83,69 @@ export class Dashboard implements OnInit {
     this.groupService.approveJoin(group.title, username).subscribe({
       next: (response) => {
         console.log('Join request approved successfully:', response);
+        this.loadGroups();
       },
       error: (error) => {
         console.error('Error approving join request:', error);
       }
     });
+  }
+
+  channels = signal<any[]>([]);
+
+  loadChannels(){
+    this.groupService.getChannels().subscribe({
+      next: (response) => {
+        this.channels.set(response);
+        console.log('Rooms loaded successfully:', response);
+      },
+      error: (error) => {
+        console.error('Error loading rooms:', error);
+      }
+    });
+  }
+
+  createChannel() {
+    const channel = {
+      name: this.channelName,
+      groupTitle: this.selectedGroupTitle,
+      minimumAge: this.channelMinimumAge,
+      createdBy: this.currentuser.username
+    };
+
+  this.groupService.createChannel(channel).subscribe({
+    next: (response) => {
+      console.log('Room created successfully:', response);
+
+      this.channelName = '';
+      this.channelMinimumAge = null;
+      this.selectedGroupTitle = '';
+
+      this.loadChannels();
+    },
+    error: (error) => {
+      console.error('Error creating room:', error);
+    }
+  });
+}
+
+  getChannelsForGroup(groupTitle: string) {
+    const groupChannels = [];
+    const allChannels = this.channels();
+
+    for(let i = 0; i < allChannels.length; i++){
+      if(allChannels[i].groupTitle === groupTitle){
+        groupChannels.push(allChannels[i]);
+      }
+    }
+
+    return groupChannels;
+
+    
+  }
+
+  logout() {
+    localStorage.removeItem('currentUser');
+    this.router.navigate(['/']);
   }
 }

@@ -183,6 +183,12 @@ app.post('/api/groups', (req, res) => {
             return res.status(400).json({message: 'Group description cannot exceed 250 characters'});
         };
         
+        for (let i = 0; i < groups.length; i++){
+            if (groups[i].title.toLowerCase() === newGroup.title.toLowerCase())
+                {return res.status(400).json({message: 'Group title already exists'});
+            }
+        };
+
         fs.readFile('./server/data/users.json', 'utf8', (err, userData) => {
             if (err) {
                 console.error('Error reading users.json:', err);
@@ -217,12 +223,6 @@ app.post('/api/groups', (req, res) => {
 
                 newGroup.members = [newGroup.admin];
                 newGroup.joinRequests = [];
-                console.log('GROUP BEFORE PUSH:', newGroup);
-                for (let i = 0; i < groups.length; i++){
-                    if(groups[i].title.toLowerCase() === newGroup.title.toLowerCase()){
-                        return res.status(400).json({message: 'Group title already exists'});
-                    }
-                };
                 groups.push(newGroup);                
             
                 const updatedData = JSON.stringify(groups, null, 2);
@@ -283,7 +283,7 @@ app.post('/api/groups/join', (req, res) => {
             const groups = JSON.parse(data);
             let groupFound = null;
             for (let i = 0; i < groups.length; i++){
-                if(groups[i].title.toLowerCase() === joinData.testitle.toLowerCase()){
+                if(groups[i].title.toLowerCase() === joinData.title.toLowerCase()){
                     groupFound = groups[i];
                     break;
                 }
@@ -323,6 +323,10 @@ app.post('/api/groups/join', (req, res) => {
 app.post('/api/groups/approve', (req, res) => {
     const approvalData = req.body;
 
+    if(!approvalData.title || !approvalData.username){
+        return res.status(400).json({message: 'Group title and username are required'});
+    }
+
     fs.readFile('./server/data/groups.json', 'utf8', (err, data) => {
         if(err){
             console.error('Error reading groups.json:', err);
@@ -331,18 +335,21 @@ app.post('/api/groups/approve', (req, res) => {
 
         const groups = JSON.parse(data);
         let groupFound = null;
-        for (let i = 0; i < groups.length; i++){
-            if(groups[i].title.toLowerCase() === approvalData.groupTitle.toLowerCase()){
+
+        for(let i = 0; i < groups.length; i++){
+            if(groups[i].title.toLowerCase() === approvalData.title.toLowerCase()){
                 groupFound = groups[i];
                 break;
             }
+        }
 
-        if(!groupFound) {
+        if(!groupFound){
             return res.status(404).json({message: 'Group not found'});
         }
-    
+
         const requestIndex = groupFound.joinRequests.indexOf(approvalData.username);
-        if(requestIndex === -1) {
+
+        if(requestIndex === -1){
             return res.status(400).json({message: 'No join request from this user'});
         }
 
@@ -356,13 +363,101 @@ app.post('/api/groups/approve', (req, res) => {
                 console.error('Error writing to groups.json:', err);
                 return res.status(500).json({message: 'Failed to update group data'});
             }
+
             return res.status(200).json({message: 'User added to group successfully'});
-            });
-        };
+        });
     });
 });
 
-    
+app.post('/api/channels', (req, res) => {
+    const newChannel = req.body;
+
+    if(!newChannel.name ||
+       !newChannel.groupTitle ||
+       newChannel.minimumAge === null ||
+       newChannel.minimumAge === undefined ||
+       !newChannel.createdBy){
+        return res.status(400).json({message: 'All fields are mandatory!'});
+    }
+
+    newChannel.name = newChannel.name.trim();
+    newChannel.groupTitle = newChannel.groupTitle.trim();
+    newChannel.createdBy = newChannel.createdBy.trim();
+
+    if(!newChannel.name || !newChannel.groupTitle || !newChannel.createdBy){
+        return res.status(400).json({message: 'All fields are mandatory!'});
+    }
+
+    fs.readFile('./server/data/groups.json', 'utf8', (err, data) => {
+        if(err){
+            console.error('Error reading groups.json:', err);
+            return res.status(500).json({message: 'Internal server error'});
+        }
+
+        const groups = JSON.parse(data);
+        let groupFound = null;
+
+        for(let i = 0; i < groups.length; i++){
+            if(groups[i].title.toLowerCase() === newChannel.groupTitle.toLowerCase()){
+                groupFound = groups[i];
+                break;
+            }
+        }
+
+        if(!groupFound){
+            return res.status(404).json({message: 'Group not found'});
+        }
+
+        if(groupFound.admin.toLowerCase() !== newChannel.createdBy.toLowerCase()){
+            return res.status(400).json({message: 'Only the Group Admin can create rooms'});
+        }
+
+        newChannel.groupTitle = groupFound.title;
+        newChannel.createdBy = groupFound.admin;
+
+        fs.readFile('./server/data/channels.json', 'utf8', (err, data) => {
+            if(err){
+                console.error('Error reading channels.json:', err);
+                return res.status(500).json({message: 'Internal server error'});
+            }
+
+            const channels = JSON.parse(data);
+
+            for(let i = 0; i < channels.length; i++){
+                if(channels[i].name.toLowerCase() === newChannel.name.toLowerCase() &&
+                   channels[i].groupTitle.toLowerCase() === newChannel.groupTitle.toLowerCase()){
+                    return res.status(400).json({message: 'Room already exists in this group'});
+                }
+            }
+
+            channels.push(newChannel);
+
+            const updatedData = JSON.stringify(channels, null, 2);
+
+            fs.writeFile('./server/data/channels.json', updatedData, 'utf8', (err) => {
+                if(err){
+                    console.error('Error writing to channels.json:', err);
+                    return res.status(500).json({message: 'Failed to save room data'});
+                }
+
+                return res.status(201).json({message: 'Room created successfully'});
+            });
+        });
+    });
+});
+
+
+app.get('/api/channels', (req, res) => {
+    fs.readFile('./server/data/channels.json', 'utf8', (err, data) => {
+        if(err){
+            console.error('Error reading channels.json:', err);
+            return res.status(500).json({message: 'Internal server error'});
+        }
+
+        const channels = JSON.parse(data);
+        return res.status(200).json(channels);
+    });
+});
 
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);

@@ -1,11 +1,21 @@
 [
   {
-    "title": "hello",
-    "description": "heel",
-    "minimumAge": 12,
-    "admin": "hellos",
+    "title": "valorant",
+    "description": "aaha",
+    "minimumAge": 20,
+    "admin": "hello1",
     "members": [
-      "hellos"
+      "hello1"
+    ],
+    "joinRequests": []
+  },
+  {
+    "title": "valorant1",
+    "description": "aaha",
+    "minimumAge": 22,
+    "admin": "hello1",
+    "members": [
+      "hello1"
     ],
     "joinRequests": []
   }

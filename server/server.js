@@ -142,6 +142,228 @@ app.post('/api/login', (req, res) => {
             return res.status(401).json({ message: 'Invalid credentials' });
     });
 });
+
+
+app.post('/api/groups', (req, res) => {
+    const newGroup = req.body;
+
+    if(
+        !newGroup.title ||
+        !newGroup.description ||
+        newGroup.minimumAge === null || newGroup.minimumAge === undefined ||
+        !newGroup.admin
+    ){
+        return res.status(400).json({message: 'All fields are mandatory!'});
+    }
+
+    fs.readFile('./server/data/groups.json', 'utf8', (err, data) => {
+        if(err){
+            console.error('Error reading groups.json:', err);
+            return res.status(500).json({message: 'Internal server error'});
+        }
+
+        const groups = JSON.parse(data);
+        newGroup.title = newGroup.title.trim();
+        newGroup.description = newGroup.description.trim();
+        newGroup.admin = newGroup.admin.trim();
+
+        if(
+        !newGroup.title ||
+        !newGroup.description ||
+        !newGroup.admin
+        ){
+            return res.status(400).json({message: 'All fields are mandatory!'});
+        };
+        
+        if(newGroup.title.length > 30) {
+            return res.status(400).json({message: 'Group title cannot exceed 30 characters'});
+        };
+        
+        if(newGroup.description.length > 250) {
+            return res.status(400).json({message: 'Group description cannot exceed 250 characters'});
+        };
+        
+        fs.readFile('./server/data/users.json', 'utf8', (err, userData) => {
+            if (err) {
+                console.error('Error reading users.json:', err);
+                return res.status(500).json({message: 'Internal server error'});
+            };
+            
+            const users = JSON.parse(userData);
+            let adminExists = false;
+            for (let i = 0; i < users.length; i++) {
+                if (
+                users[i].username.toLowerCase() === newGroup.admin.toLowerCase())
+                {adminExists = true;
+                    if (users[i].role === 'superAdmin') {
+                        return res.status(400).json({message: 'Cannot assign Super Admin as Group Admin'});
+                    }
+                    
+                    users[i].role = 'groupAdmin';
+                    newGroup.admin = users[i].username;
+                    break;
+                }
+            };
+            if (!adminExists) {
+                return res.status(400).json({message: 'Admin username does not exist'});
+            }
+            
+            const updatedUsers = JSON.stringify(users, null, 2);
+            fs.writeFile('./server/data/users.json', updatedUsers,'utf8', (err) => {
+                if (err) {
+                    console.error('Error writing to users.json:', err);
+                    return res.status(500).json({message: 'Failed to update user data'});
+                };
+
+                newGroup.members = [newGroup.admin];
+                newGroup.joinRequests = [];
+                console.log('GROUP BEFORE PUSH:', newGroup);
+                for (let i = 0; i < groups.length; i++){
+                    if(groups[i].title.toLowerCase() === newGroup.title.toLowerCase()){
+                        return res.status(400).json({message: 'Group title already exists'});
+                    }
+                };
+                groups.push(newGroup);                
+            
+                const updatedData = JSON.stringify(groups, null, 2);
+                
+                fs.writeFile('./server/data/groups.json', updatedData, 'utf8', (err) => {
+                    if (err) {
+                        console.error('Error writing to groups.json:', err);
+                        return res.status(500).json({message: 'Failed to save group data'});
+                    }
+
+                    return res.status(201).json({message: 'Group created successfully'});
+                });
+            });
+        });
+    });
+});
+
+app.get('/api/groups', (req, res) => {
+    fs.readFile('./server/data/groups.json', 'utf8', (err, data) => {
+        if(err){
+            console.error('Error reading groups.json:', err);
+            return res.status(500).json({message: 'Internal server error'});
+        }
+        const groups = JSON.parse(data);
+        return res.status(200).json(groups);
+    });
+});
+
+app.post('/api/groups/join', (req, res) => {
+    const joinData = req.body;
+    if(!joinData.title || !joinData.username) {
+        return res.status(400).json({message: 'Group title and username are required'});
+    }  
+
+    fs.readFile('./server/data/users.json', 'utf8', (err, data) => {
+        if(err){
+            console.error('Error reading user.json:', err);
+            return res.status(500).json({message: 'Internal server error'});
+        }
+
+        const users = JSON.parse(data);
+        let userFound = null;
+        for(let i = 0; i < users.length; i++){
+            if(users[i].username.toLowerCase() === joinData.username.toLowerCase()){
+                userFound = users[i];
+                break;
+            }
+        } if(!userFound) {
+            return res.status(404).json({message: 'User not found'});
+        }
+
+        fs.readFile('./server/data/groups.json', 'utf8', (err, data) => {
+            if(err){
+                console.error('Error reading groups.json:', err);
+                return res.status(500).json({message: 'Internal server error'});
+            }
+
+            const groups = JSON.parse(data);
+            let groupFound = null;
+            for (let i = 0; i < groups.length; i++){
+                if(groups[i].title.toLowerCase() === joinData.testitle.toLowerCase()){
+                    groupFound = groups[i];
+                    break;
+                }
+            } if(!groupFound) {
+                return res.status(404).json({message: 'Group not found'});
+            }
+
+            if(userFound.age < groupFound.minimumAge){
+                return res.status(400).json({message: 'User does not meet the minimum age requirement for this group'});
+            }
+
+            if(groupFound.members.includes(userFound.username)){
+                return res.status(400).json({message: 'User is already a member of this group'});
+            }
+
+            if(groupFound.joinRequests.includes(userFound.username)){
+                return res.status(400).json({message: 'User has already requested to join this group'});
+            }
+            
+            groupFound.joinRequests.push(userFound.username);
+
+            const updatedGroupsData = JSON.stringify(groups, null, 2);
+
+            fs.writeFile('./server/data/groups.json', updatedGroupsData, 'utf8', (err) => {
+                if(err){
+                    console.error('Error writing to groups.json:', err);
+                    return res.status(500).json({message: 'Failed to update group data'});
+                }
+
+                return res.status(200).json({message: 'Join request sent successfully'});
+            });
+        });
+    });
+});
+
+
+app.post('/api/groups/approve', (req, res) => {
+    const approvalData = req.body;
+
+    fs.readFile('./server/data/groups.json', 'utf8', (err, data) => {
+        if(err){
+            console.error('Error reading groups.json:', err);
+            return res.status(500).json({message: 'Internal server error'});
+        }
+
+        const groups = JSON.parse(data);
+        let groupFound = null;
+        for (let i = 0; i < groups.length; i++){
+            if(groups[i].title.toLowerCase() === approvalData.groupTitle.toLowerCase()){
+                groupFound = groups[i];
+                break;
+            }
+
+        if(!groupFound) {
+            return res.status(404).json({message: 'Group not found'});
+        }
+    
+        const requestIndex = groupFound.joinRequests.indexOf(approvalData.username);
+        if(requestIndex === -1) {
+            return res.status(400).json({message: 'No join request from this user'});
+        }
+
+        groupFound.joinRequests.splice(requestIndex, 1);
+        groupFound.members.push(approvalData.username);
+
+        const updatedGroupsData = JSON.stringify(groups, null, 2);
+
+        fs.writeFile('./server/data/groups.json', updatedGroupsData, 'utf8', (err) => {
+            if(err){
+                console.error('Error writing to groups.json:', err);
+                return res.status(500).json({message: 'Failed to update group data'});
+            }
+            return res.status(200).json({message: 'User added to group successfully'});
+            });
+        };
+    });
+});
+
+    
+
 app.listen(port, () => {
   console.log(`Server running on port ${port}`);
-});
+})

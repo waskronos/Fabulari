@@ -1,7 +1,7 @@
 import { Component, inject } from '@angular/core';
 import { User } from '../../services/user';
 import { FormsModule } from '@angular/forms';
-
+import { Router } from '@angular/router';
 
 @Component({
   imports: [FormsModule],
@@ -12,6 +12,8 @@ import { FormsModule } from '@angular/forms';
 export class Login {
 
   private userService = inject(User);
+  private router = inject(Router);
+  
   username: string = '';
   password: string = '';
   
@@ -26,6 +28,7 @@ export class Login {
       console.log('User logged in successfully:', response);
 
       localStorage.setItem('currentUser', JSON.stringify(response.user));
+      this.router.navigate(['/dashboard']);
     },
     error: (error) => {
       console.error('Error logging in user:', error);

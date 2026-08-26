@@ -1,0 +1,12 @@
+[
+  {
+    "title": "hello",
+    "description": "heel",
+    "minimumAge": 12,
+    "admin": "hellos",
+    "members": [
+      "hellos"
+    ],
+    "joinRequests": []
+  }
+]

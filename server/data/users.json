@@ -7,5 +7,14 @@
     "age": 22,
     "password": "$2b$10$4ud/mtvlpTM.QL9jAPUtjeo0IbCGs3iwgG99NcMGFtvrjGURERYCS",
     "role": "superAdmin"
+  },
+  {
+    "username": "hellos",
+    "firstName": "agam",
+    "lastName": "preet",
+    "email": "aa@gmail.com",
+    "age": 22,
+    "password": "$2b$10$4ud/mtvlpTM.QL9jAPUtjeo0IbCGs3iwgG99NcMGFtvrjGURERYCS",
+    "role": "groupAdmin"
   }
 ]

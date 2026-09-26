@@ -2,6 +2,12 @@
 
   @if (currentuser) {
 
+    @if (feedbackMessage) {
+      <div class="alert" [class.alert-error]="feedbackType === 'error'" role="alert">
+        {{ feedbackMessage }}
+      </div>
+    }
+
     <h1>Welcome, {{ currentuser.firstName }}</h1>
     <p>Logged in as: {{ currentuser.username }}</p>
     <p>Role: {{ currentuser.role }}</p>

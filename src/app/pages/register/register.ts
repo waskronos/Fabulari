@@ -1,6 +1,8 @@
 import { inject, Component } from '@angular/core';
 import { FormsModule } from '@angular/forms';
+import { HttpErrorResponse } from '@angular/common/http';
 import { User } from '../../services/user';
+import { ApiMessage, RegisterRequest } from '../../models/user.model';
 
 @Component({
   imports: [FormsModule],
@@ -16,26 +18,48 @@ export class Register {
   firstName: string = '';
   lastName: string = '';
   email: string = '';
-  age: number | null = null;
+  dateOfBirth: string = '';
   password: string = '';
+  feedbackMessage: string = '';
+  feedbackType: 'success' | 'error' = 'success';
 
-  register(){
-    const user = {
+  register() {
+    this.feedbackMessage = '';
+
+    if (!this.dateOfBirth) {
+      this.showFeedback('Please enter your date of birth.', 'error');
+      return;
+    }
+
+    if (new Date(`${this.dateOfBirth}T00:00:00`) > new Date()) {
+      this.showFeedback('Date of birth cannot be in the future.', 'error');
+      return;
+    }
+
+    const user: RegisterRequest = {
       username: this.username,
       firstName: this.firstName,
       lastName: this.lastName,
       email: this.email,
-      age: this.age,
+      dateOfBirth: this.dateOfBirth,
       password: this.password
     };
+
     this.userService.registerUser(user).subscribe({
-      next: (response) => {
-        console.log('User registered successfully:', response);
+      next: (response: ApiMessage) => {
+        this.showFeedback(response.message, 'success');
       },
-      error: (error) => {
-        console.error('Error registering user:', error);
+      error: (error: HttpErrorResponse) => {
+        this.showFeedback(
+          error.error?.message ?? 'Registration failed. Please try again.',
+          'error'
+        );
       }
-    })
-    }
+    });
   }
 
+  private showFeedback(message: string, type: 'success' | 'error') {
+    this.feedbackMessage = message;
+    this.feedbackType = type;
+  }
+}

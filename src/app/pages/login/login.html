@@ -1,5 +1,10 @@
 <div>
     <h1>Login</h1>
+
+    @if (feedbackMessage) {
+        <div class="alert" role="alert">{{ feedbackMessage }}</div>
+    }
+
     <label for="username">Username:</label>
     <input
         type="text"

@@ -74,3 +74,17 @@ button:hover {
 p {
   color: #d1d3dc;
 }
+
+.alert {
+  padding: 12px 16px;
+  border: 1px solid #4ca875;
+  border-radius: 6px;
+  background: #173825;
+  color: #d8f7e5;
+}
+
+.alert-error {
+  border-color: #d05b65;
+  background: #421e23;
+  color: #ffe3e6;
+}

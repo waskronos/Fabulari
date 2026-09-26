@@ -39,3 +39,20 @@ p {
   color: #aeb2c0;
   margin-top: 20px;
 }
+
+.alert {
+  width: 350px;
+  box-sizing: border-box;
+  margin-bottom: 20px;
+  padding: 12px;
+  border: 1px solid #4ca875;
+  border-radius: 6px;
+  background: #173825;
+  color: #d8f7e5;
+}
+
+.alert-error {
+  border-color: #d05b65;
+  background: #421e23;
+  color: #ffe3e6;
+}

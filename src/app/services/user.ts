@@ -1,14 +1,21 @@
 import { inject, Service } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
+import {
+  ApiMessage,
+  LoginRequest,
+  LoginResponse,
+  RegisterRequest,
+} from '../models/user.model';
 
 @Service()
 export class User {
     private http = inject(HttpClient);
 
-    registerUser(user: object){
-    return this.http.post('http://localhost:3000/api/users', user);}
+    registerUser(user: RegisterRequest) {
+      return this.http.post<ApiMessage>('http://localhost:3000/api/users', user);
+    }
 
-    loginUser(credentials: object){
-    return this.http.post('http://localhost:3000/api/login', credentials);}
+    loginUser(credentials: LoginRequest) {
+      return this.http.post<LoginResponse>('http://localhost:3000/api/login', credentials);
+    }
 }
-

@@ -1,7 +1,9 @@
 import { Component, inject } from '@angular/core';
+import { HttpErrorResponse } from '@angular/common/http';
 import { User } from '../../services/user';
 import { FormsModule } from '@angular/forms';
 import { Router } from '@angular/router';
+import { LoginRequest, LoginResponse } from '../../models/user.model';
 
 @Component({
   imports: [FormsModule],
@@ -16,23 +18,24 @@ export class Login {
   
   username: string = '';
   password: string = '';
+  feedbackMessage: string = '';
   
   login(){
-    const loginData = {
-    username: this.username,
-    password: this.password
+    this.feedbackMessage = '';
+
+    const loginData: LoginRequest = {
+      username: this.username,
+      password: this.password
     };
 
   this.userService.loginUser(loginData).subscribe({
-    next: (response: any) => {
-      console.log('User logged in successfully:', response);
-
+    next: (response: LoginResponse) => {
       localStorage.setItem('currentUser', JSON.stringify(response.user));
       this.router.navigate(['/dashboard']);
     },
-    error: (error) => {
-      console.error('Error logging in user:', error);
+    error: (error: HttpErrorResponse) => {
+      this.feedbackMessage = error.error?.message ?? 'Login failed. Please try again.';
     }
     });
-  };
+  }
 }

@@ -33,3 +33,14 @@ button {
 button:hover {
   opacity: 0.85;
 }
+
+.alert {
+  width: 320px;
+  box-sizing: border-box;
+  margin-bottom: 20px;
+  padding: 12px;
+  border: 1px solid #d05b65;
+  border-radius: 6px;
+  background: #421e23;
+  color: #ffe3e6;
+}

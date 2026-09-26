@@ -8,6 +8,20 @@ import { checkDatabaseHealth, connectDB } from './db.js';
 const app = express();
 const port = Number(process.env.HTTP_PORT) || 3000;
 
+function calculateAge(dateOfBirth) {
+    const today = new Date();
+    const birthDate = new Date(`${dateOfBirth}T00:00:00`);
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const birthdayHasPassed =
+        today.getMonth() > birthDate.getMonth() ||
+        (today.getMonth() === birthDate.getMonth() && today.getDate() >= birthDate.getDate());
+
+    if (!birthdayHasPassed) {
+        age--;
+    }
+
+    return age;
+}
 
 app.use(cors());
 app.use(express.json());
@@ -18,7 +32,7 @@ app.post('/api/users', (req, res) => {
          !newUser.firstName ||
           !newUser.lastName ||
            !newUser.email ||
-             newUser.age === null ||
+             !newUser.dateOfBirth ||
              !newUser.password){
 
             return res.status(400).json({message: 'All fields are mandatory!'})};
@@ -36,6 +50,11 @@ app.post('/api/users', (req, res) => {
     if(!emailRegex.test(newUser.email)){
         return res.status(400).json({message: 'Invalid email format'});
     };
+
+    const birthDate = new Date(`${newUser.dateOfBirth}T00:00:00`);
+    if (Number.isNaN(birthDate.getTime()) || birthDate > new Date()) {
+        return res.status(400).json({message: 'Please enter a valid date of birth'});
+    }
 
     fs.readFile('./server/data/users.json', 'utf8', async (err, data) => {
         if(err){
@@ -132,7 +151,10 @@ app.post('/api/login', (req, res) => {
                             firstName: users[i].firstName,
                             lastName: users[i].lastName,
                             email: users[i].email,
-                            age: users[i].age,
+                            dateOfBirth: users[i].dateOfBirth,
+                            age: users[i].dateOfBirth
+                                ? calculateAge(users[i].dateOfBirth)
+                                : users[i].age,
                             role: users[i].role }
                 });
                 }
@@ -293,7 +315,11 @@ app.post('/api/groups/join', (req, res) => {
                 return res.status(404).json({message: 'Group not found'});
             }
 
-            if(userFound.age < groupFound.minimumAge){
+            const userAge = userFound.dateOfBirth
+                ? calculateAge(userFound.dateOfBirth)
+                : userFound.age;
+
+            if(userAge < groupFound.minimumAge){
                 return res.status(400).json({message: 'User does not meet the minimum age requirement for this group'});
             }
 

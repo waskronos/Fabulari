@@ -1,4 +1,5 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
+import { HttpErrorResponse } from '@angular/common/http';
 import { Router } from '@angular/router';
 import {FormsModule} from '@angular/forms';
 import { Group } from '../../services/group';
@@ -11,6 +12,8 @@ import { Group } from '../../services/group';
 })
 export class Dashboard implements OnInit {
   currentuser: any = null;
+  feedbackMessage: string = '';
+  feedbackType: 'success' | 'error' = 'success';
   constructor(private router: Router) {}
 
   ngOnInit() {
@@ -44,12 +47,12 @@ export class Dashboard implements OnInit {
     };
 
     this.groupService.createGroup(group).subscribe({
-      next: (response) => {
-        console.log('Group created successfully:', response);
+      next: (response: any) => {
+        this.showFeedback(response.message, 'success');
         this.loadGroups();
       },
-      error: (error) => {
-        console.error('Error creating group:', error);
+      error: (error: HttpErrorResponse) => {
+        this.showApiError(error, 'Group could not be created.');
       }
     });
   }
@@ -59,34 +62,33 @@ export class Dashboard implements OnInit {
     this.groupService.getGroup().subscribe({
       next: (response) => {
         this.groups.set(response);
-        console.log('Groups loaded successfully:', response);
       },
-      error: (error) => {
-        console.error('Error loading groups:', error);
+      error: (error: HttpErrorResponse) => {
+        this.showApiError(error, 'Groups could not be loaded.');
       }
     });
   }
   
   requestJoin(group: any) {
     this.groupService.requestJoin(group.title, this.currentuser.username).subscribe({
-      next: (response) => {
-        console.log('Join request sent successfully:', response);
+      next: (response: any) => {
+        this.showFeedback(response.message, 'success');
         this.loadGroups();
       },
-      error: (error) => {
-        console.error('Error sending join request:', error);
+      error: (error: HttpErrorResponse) => {
+        this.showApiError(error, 'Join request could not be sent.');
       }
     });
   }
 
   approveJoin(group: any, username: string) {
     this.groupService.approveJoin(group.title, username).subscribe({
-      next: (response) => {
-        console.log('Join request approved successfully:', response);
+      next: (response: any) => {
+        this.showFeedback(response.message, 'success');
         this.loadGroups();
       },
-      error: (error) => {
-        console.error('Error approving join request:', error);
+      error: (error: HttpErrorResponse) => {
+        this.showApiError(error, 'Join request could not be approved.');
       }
     });
   }
@@ -97,10 +99,9 @@ export class Dashboard implements OnInit {
     this.groupService.getChannels().subscribe({
       next: (response) => {
         this.channels.set(response);
-        console.log('Rooms loaded successfully:', response);
       },
-      error: (error) => {
-        console.error('Error loading rooms:', error);
+      error: (error: HttpErrorResponse) => {
+        this.showApiError(error, 'Channels could not be loaded.');
       }
     });
   }
@@ -114,8 +115,8 @@ export class Dashboard implements OnInit {
     };
 
   this.groupService.createChannel(channel).subscribe({
-    next: (response) => {
-      console.log('Room created successfully:', response);
+    next: (response: any) => {
+      this.showFeedback(response.message, 'success');
 
       this.channelName = '';
       this.channelMinimumAge = null;
@@ -123,8 +124,8 @@ export class Dashboard implements OnInit {
 
       this.loadChannels();
     },
-    error: (error) => {
-      console.error('Error creating room:', error);
+    error: (error: HttpErrorResponse) => {
+      this.showApiError(error, 'Channel could not be created.');
     }
   });
 }
@@ -147,5 +148,14 @@ export class Dashboard implements OnInit {
   logout() {
     localStorage.removeItem('currentUser');
     this.router.navigate(['/']);
+  }
+
+  private showApiError(error: HttpErrorResponse, fallbackMessage: string) {
+    this.showFeedback(error.error?.message ?? fallbackMessage, 'error');
+  }
+
+  private showFeedback(message: string, type: 'success' | 'error') {
+    this.feedbackMessage = message;
+    this.feedbackType = type;
   }
 }

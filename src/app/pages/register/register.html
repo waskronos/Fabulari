@@ -2,6 +2,12 @@
     <h1>Register
     </h1>
 
+    @if (feedbackMessage) {
+        <div class="alert" [class.alert-error]="feedbackType === 'error'" role="alert">
+            {{ feedbackMessage }}
+        </div>
+    }
+
     <label for="username">Username:</label>
     <input
         type="text"
@@ -30,12 +36,13 @@
         name="email"
         [(ngModel)]="email"
     />
-    <label for= "age">Age:</label>
+    <label for="dateOfBirth">Date of Birth:</label>
     <input
-        type="number"
-        id="age"
-        name="age"
-        [(ngModel)]="age"
+        type="date"
+        id="dateOfBirth"
+        name="dateOfBirth"
+        [(ngModel)]="dateOfBirth"
+        required
     />
     <label for= "password">Password:</label>
     <input
@@ -47,5 +54,4 @@
 
     <button (click)="register()">Register</button>
 
-    <p>You entered {{ username }} and first name: {{ firstName }} and last name: {{ lastName }} and email: {{ email }} and age: {{ age }}</p>
 </div>

@@ -3,7 +3,9 @@
     "title": "valorant",
     "description": "aaha",
     "minimumAge": 20,
-    "admin": "hello1",
+    "admins": [
+      "hello1"
+    ],
     "members": [
       "hello1"
     ],
@@ -13,7 +15,9 @@
     "title": "valorant1",
     "description": "aaha",
     "minimumAge": 22,
-    "admin": "hello1",
+    "admins": [
+      "hello1"
+    ],
     "members": [
       "hello1"
     ],

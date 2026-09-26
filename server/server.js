@@ -170,102 +170,6 @@ app.post('/api/login', (req, res) => {
 });
 
 
-app.post('/api/groups', (req, res) => {
-    const newGroup = req.body;
-
-    if(
-        !newGroup.title ||
-        !newGroup.description ||
-        newGroup.minimumAge === null || newGroup.minimumAge === undefined ||
-        !newGroup.admin
-    ){
-        return res.status(400).json({message: 'All fields are mandatory!'});
-    }
-
-    fs.readFile('./server/data/groups.json', 'utf8', (err, data) => {
-        if(err){
-            console.error('Error reading groups.json:', err);
-            return res.status(500).json({message: 'Internal server error'});
-        }
-
-        const groups = JSON.parse(data);
-        newGroup.title = newGroup.title.trim();
-        newGroup.description = newGroup.description.trim();
-        newGroup.admin = newGroup.admin.trim();
-
-        if(
-        !newGroup.title ||
-        !newGroup.description ||
-        !newGroup.admin
-        ){
-            return res.status(400).json({message: 'All fields are mandatory!'});
-        };
-        
-        if(newGroup.title.length > 30) {
-            return res.status(400).json({message: 'Group title cannot exceed 30 characters'});
-        };
-        
-        if(newGroup.description.length > 250) {
-            return res.status(400).json({message: 'Group description cannot exceed 250 characters'});
-        };
-        
-        for (let i = 0; i < groups.length; i++){
-            if (groups[i].title.toLowerCase() === newGroup.title.toLowerCase())
-                {return res.status(400).json({message: 'Group title already exists'});
-            }
-        };
-
-        fs.readFile('./server/data/users.json', 'utf8', (err, userData) => {
-            if (err) {
-                console.error('Error reading users.json:', err);
-                return res.status(500).json({message: 'Internal server error'});
-            };
-            
-            const users = JSON.parse(userData);
-            let adminExists = false;
-            for (let i = 0; i < users.length; i++) {
-                if (
-                users[i].username.toLowerCase() === newGroup.admin.toLowerCase())
-                {adminExists = true;
-                    if (users[i].role === 'superAdmin') {
-                        return res.status(400).json({message: 'Cannot assign Super Admin as Group Admin'});
-                    }
-                    
-                    users[i].role = 'groupAdmin';
-                    newGroup.admin = users[i].username;
-                    break;
-                }
-            };
-            if (!adminExists) {
-                return res.status(400).json({message: 'Admin username does not exist'});
-            }
-            
-            const updatedUsers = JSON.stringify(users, null, 2);
-            fs.writeFile('./server/data/users.json', updatedUsers,'utf8', (err) => {
-                if (err) {
-                    console.error('Error writing to users.json:', err);
-                    return res.status(500).json({message: 'Failed to update user data'});
-                };
-
-                newGroup.members = [newGroup.admin];
-                newGroup.joinRequests = [];
-                groups.push(newGroup);                
-            
-                const updatedData = JSON.stringify(groups, null, 2);
-                
-                fs.writeFile('./server/data/groups.json', updatedData, 'utf8', (err) => {
-                    if (err) {
-                        console.error('Error writing to groups.json:', err);
-                        return res.status(500).json({message: 'Failed to save group data'});
-                    }
-
-                    return res.status(201).json({message: 'Group created successfully'});
-                });
-            });
-        });
-    });
-});
-
 app.get('/api/groups', (req, res) => {
     fs.readFile('./server/data/groups.json', 'utf8', (err, data) => {
         if(err){
@@ -412,16 +316,12 @@ app.patch('/api/group-requests/:requestId', async (req, res) => {
                 title: request.title,
                 description: request.description,
                 minimumAge: request.minimumAge,
-                admin: requester.username,
+                admins: [requester.username],
                 members: [requester.username],
                 joinRequests: [],
             });
-            requester.role = 'groupAdmin';
 
-            await Promise.all([
-                writeJsonFile('./server/data/groups.json', groups),
-                writeJsonFile('./server/data/users.json', users),
-            ]);
+            await writeJsonFile('./server/data/groups.json', groups);
         }
 
         request.status = action === 'approve' ? 'approved' : 'rejected';
@@ -599,12 +499,16 @@ app.post('/api/channels', (req, res) => {
             return res.status(404).json({message: 'Group not found'});
         }
 
-        if(groupFound.admin.toLowerCase() !== newChannel.createdBy.toLowerCase()){
+        const groupAdmin = groupFound.admins.find(
+            admin => admin.toLowerCase() === newChannel.createdBy.toLowerCase()
+        );
+
+        if(!groupAdmin){
             return res.status(400).json({message: 'Only the Group Admin can create rooms'});
         }
 
         newChannel.groupTitle = groupFound.title;
-        newChannel.createdBy = groupFound.admin;
+        newChannel.createdBy = groupAdmin;
 
         fs.readFile('./server/data/channels.json', 'utf8', (err, data) => {
             if(err){

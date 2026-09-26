@@ -57,7 +57,7 @@
         <button (click)="requestGroup()">Send Request</button>
       </details>
 
-      @if (currentuser.role === 'groupAdmin') {
+      @if (isGroupAdminOfAnyGroup()) {
         <details>
           <summary>Group Admin tools</summary>
 
@@ -66,7 +66,7 @@
           <select id="channelGroup" [(ngModel)]="selectedGroupTitle">
             <option value="">Select Group</option>
             @for (group of groups(); track $index) {
-              @if (group.admin === currentuser.username) {
+              @if (isGroupAdmin(group)) {
                 <option [value]="group.title">{{ group.title }}</option>
               }
             }
@@ -97,7 +97,7 @@
           Minimum Age: {{ group.minimumAge }}
         </p>
         <p>
-          Group Admin: {{ group.admin }}
+          Group Admins: {{ group.admins.join(', ') }}
         </p>
 
         @if (currentuser.role !== 'superAdmin') {
@@ -120,8 +120,7 @@
         }
 
         @if (
-          currentuser.role === 'groupAdmin' &&
-          group.admin === currentuser.username
+          isGroupAdmin(group)
         ) {
 
           <h4>Join Requests</h4>

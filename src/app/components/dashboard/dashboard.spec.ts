@@ -25,4 +25,11 @@ describe('Dashboard', () => {
   it('should create', () => {
     expect(component).toBeTruthy();
   });
+
+  it('checks Group Admin access from the group', () => {
+    component.currentuser = { username: 'hello1' };
+
+    expect(component.isGroupAdmin({ admins: ['hello1'] })).toBe(true);
+    expect(component.isGroupAdmin({ admins: ['hello2'] })).toBe(false);
+  });
 });

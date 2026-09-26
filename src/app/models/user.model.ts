@@ -19,7 +19,7 @@ export interface CurrentUser {
   email: string;
   dateOfBirth?: string;
   age: number;
-  role: 'user' | 'groupAdmin' | 'superAdmin';
+  role: 'user' | 'superAdmin';
 }
 
 export interface ApiMessage {

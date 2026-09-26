@@ -15,7 +15,7 @@
     "email": "ex1@ex.com",
     "age": 22,
     "password": "$2b$10$v/LFqTHkhPCQaV9VTcB5c.3d9MRtOYCqjuirXrt8vmx5U5EQhJDLm",
-    "role": "groupAdmin"
+    "role": "user"
   },
   {
     "username": "hello2",

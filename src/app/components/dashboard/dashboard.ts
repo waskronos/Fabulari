@@ -181,6 +181,22 @@ export class Dashboard implements OnInit {
     
   }
 
+  isGroupAdmin(group: any) {
+    return group.admins.includes(this.currentuser.username);
+  }
+
+  isGroupAdminOfAnyGroup() {
+    const allGroups = this.groups();
+
+    for (let i = 0; i < allGroups.length; i++) {
+      if (this.isGroupAdmin(allGroups[i])) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
   logout() {
     localStorage.removeItem('currentUser');
     this.router.navigate(['/']);

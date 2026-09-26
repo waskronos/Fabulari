@@ -19,77 +19,68 @@
 
       <h2>Super Admin</h2>
 
-      <h3>Create Group</h3>
+      <details open>
+        <summary>Pending group requests ({{ groupRequests().length }})</summary>
 
-      <label>Group Title</label>
-      <input
-        type="text"
-        [(ngModel)]="groupTitle"
-        maxlength="30"
-      />
-
-      <label>Description</label>
-      <textarea
-        [(ngModel)]="groupDescription"
-        maxlength="250">
-      </textarea>
-
-      <label>Minimum Age</label>
-      <input
-        type="number"
-        [(ngModel)]="minimumAge"
-      />
-
-      <label>Group Admin Username</label>
-      <input
-        type="text"
-        [(ngModel)]="groupAdmin"
-      />
-
-      <button (click)="createGroup()">
-        Create Group
-      </button>
-
-      <button>Manage Users</button>
-
-
-} @else if (currentuser.role === 'groupAdmin') {
-
-  <h2>Group Admin</h2>
-
-  <h3>Create Room</h3>
-
-  <label>Group</label>
-
-  <select [(ngModel)]="selectedGroupTitle">
-
-    <option value="">Select Group</option>
-
-    @for (group of groups(); track $index) {
-
-      @if (group.admin === currentuser.username) {
-        <option [value]="group.title">
-          {{ group.title }}
-        </option>
-      }
-
-    }
-
-  </select>
-
-  <label>Room Name</label>
-
-  <input type="text" [(ngModel)]="channelName"/>
-
-  <label>Minimum Age</label>
-
-  <input type="number" [(ngModel)]="channelMinimumAge"/>
-
-    <button (click)="createChannel()">Create Room
-    </button>
+        @for (request of groupRequests(); track request.id) {
+          <div class="request-card">
+            <h3>{{ request.title }}</h3>
+            <p>{{ request.description }}</p>
+            <p>Requested by: {{ request.requestedBy }}</p>
+            <p>Minimum age: {{ request.minimumAge }}</p>
+            <button (click)="reviewGroupRequest(request.id, 'approve')">Approve</button>
+            <button class="danger-button" (click)="reviewGroupRequest(request.id, 'reject')">
+              Reject
+            </button>
+          </div>
+        } @empty {
+          <p>No pending group requests.</p>
+        }
+      </details>
     } @else {
+      <details>
+        <summary>Request a new group</summary>
 
-      <h2>User</h2>
+        <label for="groupTitle">Group Title</label>
+        <input id="groupTitle" type="text" [(ngModel)]="groupTitle" maxlength="30" />
+
+        <label for="groupDescription">Description</label>
+        <textarea
+          id="groupDescription"
+          [(ngModel)]="groupDescription"
+          maxlength="250">
+        </textarea>
+
+        <label for="groupMinimumAge">Minimum Age</label>
+        <input id="groupMinimumAge" type="number" min="0" [(ngModel)]="minimumAge" />
+
+        <button (click)="requestGroup()">Send Request</button>
+      </details>
+
+      @if (currentuser.role === 'groupAdmin') {
+        <details>
+          <summary>Group Admin tools</summary>
+
+          <h3>Create Channel</h3>
+          <label for="channelGroup">Group</label>
+          <select id="channelGroup" [(ngModel)]="selectedGroupTitle">
+            <option value="">Select Group</option>
+            @for (group of groups(); track $index) {
+              @if (group.admin === currentuser.username) {
+                <option [value]="group.title">{{ group.title }}</option>
+              }
+            }
+          </select>
+
+          <label for="channelName">Channel Name</label>
+          <input id="channelName" type="text" [(ngModel)]="channelName" />
+
+          <label for="channelMinimumAge">Minimum Age</label>
+          <input id="channelMinimumAge" type="number" min="0" [(ngModel)]="channelMinimumAge" />
+
+          <button (click)="createChannel()">Create Channel</button>
+        </details>
+      }
     }
 
 

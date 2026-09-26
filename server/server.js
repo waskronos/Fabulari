@@ -1,6 +1,8 @@
 import express from 'express';
 import cors from 'cors';
 import fs from 'fs';
+import { promises as fsPromises } from 'fs';
+import { randomUUID } from 'crypto';
 import bcrypt from 'bcryptjs';
 import 'dotenv/config';
 import { checkDatabaseHealth, connectDB } from './db.js';
@@ -275,6 +277,167 @@ app.get('/api/groups', (req, res) => {
     });
 });
 
+app.post('/api/group-requests', async (req, res) => {
+    const { title, description, minimumAge, requestedBy } = req.body;
+
+    if (!title?.trim() || !description?.trim() || minimumAge === null ||
+        minimumAge === undefined || !requestedBy?.trim()) {
+        return res.status(400).json({message: 'All fields are mandatory!'});
+    }
+
+    const cleanTitle = title.trim();
+    const cleanDescription = description.trim();
+    const numericMinimumAge = Number(minimumAge);
+
+    if (cleanTitle.length > 30) {
+        return res.status(400).json({message: 'Group title cannot exceed 30 characters'});
+    }
+    if (cleanDescription.length > 250) {
+        return res.status(400).json({message: 'Group description cannot exceed 250 characters'});
+    }
+    if (!Number.isInteger(numericMinimumAge) || numericMinimumAge < 0) {
+        return res.status(400).json({message: 'Minimum age must be a positive whole number'});
+    }
+
+    try {
+        const [users, groups, requests] = await Promise.all([
+            readJsonFile('./server/data/users.json'),
+            readJsonFile('./server/data/groups.json'),
+            readJsonFile('./server/data/requests.json'),
+        ]);
+        const requester = users.find(
+            user => user.username.toLowerCase() === requestedBy.trim().toLowerCase()
+        );
+
+        if (!requester) {
+            return res.status(404).json({message: 'User not found'});
+        }
+        if (requester.role === 'superAdmin') {
+            return res.status(400).json({message: 'Super Admin cannot request a group'});
+        }
+        if (groups.some(group => group.title.toLowerCase() === cleanTitle.toLowerCase())) {
+            return res.status(400).json({message: 'Group title already exists'});
+        }
+
+        const duplicateRequest = requests.some(request =>
+            request.type === 'group' &&
+            request.status === 'pending' &&
+            request.title.toLowerCase() === cleanTitle.toLowerCase()
+        );
+        if (duplicateRequest) {
+            return res.status(400).json({message: 'A request for this group title is already pending'});
+        }
+
+        requests.push({
+            id: randomUUID(),
+            type: 'group',
+            title: cleanTitle,
+            description: cleanDescription,
+            minimumAge: numericMinimumAge,
+            requestedBy: requester.username,
+            status: 'pending',
+            createdAt: new Date().toISOString(),
+        });
+
+        await writeJsonFile('./server/data/requests.json', requests);
+        return res.status(201).json({message: 'Group request sent to the Super Admin'});
+    } catch (error) {
+        console.error('Error creating group request:', error);
+        return res.status(500).json({message: 'Failed to save group request'});
+    }
+});
+
+app.get('/api/group-requests', async (req, res) => {
+    const username = String(req.query.username ?? '').trim();
+
+    try {
+        const [users, requests] = await Promise.all([
+            readJsonFile('./server/data/users.json'),
+            readJsonFile('./server/data/requests.json'),
+        ]);
+        const currentUser = users.find(
+            user => user.username.toLowerCase() === username.toLowerCase()
+        );
+
+        if (!currentUser || currentUser.role !== 'superAdmin') {
+            return res.status(403).json({message: 'Only the Super Admin can view group requests'});
+        }
+
+        return res.status(200).json(
+            requests.filter(request => request.type === 'group' && request.status === 'pending')
+        );
+    } catch (error) {
+        console.error('Error loading group requests:', error);
+        return res.status(500).json({message: 'Failed to load group requests'});
+    }
+});
+
+app.patch('/api/group-requests/:requestId', async (req, res) => {
+    const { action, reviewedBy } = req.body;
+
+    if (!['approve', 'reject'].includes(action)) {
+        return res.status(400).json({message: 'Action must be approve or reject'});
+    }
+
+    try {
+        const [users, groups, requests] = await Promise.all([
+            readJsonFile('./server/data/users.json'),
+            readJsonFile('./server/data/groups.json'),
+            readJsonFile('./server/data/requests.json'),
+        ]);
+        const reviewer = users.find(
+            user => user.username.toLowerCase() === String(reviewedBy ?? '').trim().toLowerCase()
+        );
+
+        if (!reviewer || reviewer.role !== 'superAdmin') {
+            return res.status(403).json({message: 'Only the Super Admin can review group requests'});
+        }
+
+        const request = requests.find(item => item.id === req.params.requestId);
+        if (!request || request.type !== 'group' || request.status !== 'pending') {
+            return res.status(404).json({message: 'Pending group request not found'});
+        }
+
+        if (action === 'approve') {
+            if (groups.some(group => group.title.toLowerCase() === request.title.toLowerCase())) {
+                return res.status(400).json({message: 'Group title already exists'});
+            }
+
+            const requester = users.find(user => user.username === request.requestedBy);
+            if (!requester) {
+                return res.status(404).json({message: 'Requesting user no longer exists'});
+            }
+
+            groups.push({
+                title: request.title,
+                description: request.description,
+                minimumAge: request.minimumAge,
+                admin: requester.username,
+                members: [requester.username],
+                joinRequests: [],
+            });
+            requester.role = 'groupAdmin';
+
+            await Promise.all([
+                writeJsonFile('./server/data/groups.json', groups),
+                writeJsonFile('./server/data/users.json', users),
+            ]);
+        }
+
+        request.status = action === 'approve' ? 'approved' : 'rejected';
+        request.reviewedBy = reviewer.username;
+        request.reviewedAt = new Date().toISOString();
+        await writeJsonFile('./server/data/requests.json', requests);
+
+        return res.status(200).json({
+            message: action === 'approve' ? 'Group request approved' : 'Group request rejected'
+        });
+    } catch (error) {
+        console.error('Error reviewing group request:', error);
+        return res.status(500).json({message: 'Failed to review group request'});
+    }
+});
+
 app.post('/api/groups/join', (req, res) => {
     const joinData = req.body;
     if(!joinData.title || !joinData.username) {
@@ -496,6 +659,15 @@ app.get('/api/health', async (_req, res) => {
         return res.status(503).json({server: 'ok', database: 'unavailable'});
     }
 });
+
+async function readJsonFile(path) {
+    const data = await fsPromises.readFile(path, 'utf8');
+    return JSON.parse(data);
+}
+
+async function writeJsonFile(path, value) {
+    await fsPromises.writeFile(path, JSON.stringify(value, null, 2), 'utf8');
+}
 
 async function startServer() {
     try {

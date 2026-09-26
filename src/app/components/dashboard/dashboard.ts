@@ -3,6 +3,12 @@ import { HttpErrorResponse } from '@angular/common/http';
 import { Router } from '@angular/router';
 import {FormsModule} from '@angular/forms';
 import { Group } from '../../services/group';
+import {
+  ApiMessage,
+  GroupRequestData,
+  PendingGroupRequest,
+  RequestDecision,
+} from '../../models/group.model';
 
 @Component({
   imports: [FormsModule],
@@ -22,6 +28,9 @@ export class Dashboard implements OnInit {
       this.currentuser = JSON.parse(storedUser);
       this.loadGroups(); 
       this.loadChannels();
+      if (this.currentuser.role === 'superAdmin') {
+        this.loadGroupRequests();
+      }
     } else {
       this.router.navigate(['/login']);
     }
@@ -30,7 +39,6 @@ export class Dashboard implements OnInit {
   groupTitle: string = '';
   groupDescription: string = '';
   minimumAge: number | null = null;
-  groupAdmin: string = '';
 
   channelName: string = '';
   channelMinimumAge: number | null = null;
@@ -38,23 +46,51 @@ export class Dashboard implements OnInit {
 
   private groupService = inject(Group);
 
-  createGroup() {
-    const group = {
+  requestGroup() {
+    const request: GroupRequestData = {
       title: this.groupTitle,
       description: this.groupDescription,
       minimumAge: this.minimumAge,
-      admin: this.groupAdmin
+      requestedBy: this.currentuser.username,
     };
 
-    this.groupService.createGroup(group).subscribe({
-      next: (response: any) => {
+    this.groupService.requestGroup(request).subscribe({
+      next: (response: ApiMessage) => {
         this.showFeedback(response.message, 'success');
-        this.loadGroups();
+        this.groupTitle = '';
+        this.groupDescription = '';
+        this.minimumAge = null;
       },
       error: (error: HttpErrorResponse) => {
-        this.showApiError(error, 'Group could not be created.');
+        this.showApiError(error, 'Group request could not be sent.');
       }
     });
+  }
+
+  groupRequests = signal<PendingGroupRequest[]>([]);
+
+  loadGroupRequests() {
+    this.groupService.getGroupRequests(this.currentuser.username).subscribe({
+      next: (requests) => this.groupRequests.set(requests),
+      error: (error: HttpErrorResponse) => {
+        this.showApiError(error, 'Group requests could not be loaded.');
+      },
+    });
+  }
+
+  reviewGroupRequest(requestId: string, action: RequestDecision) {
+    this.groupService
+      .reviewGroupRequest(requestId, action, this.currentuser.username)
+      .subscribe({
+        next: (response: ApiMessage) => {
+          this.showFeedback(response.message, 'success');
+          this.loadGroupRequests();
+          this.loadGroups();
+        },
+        error: (error: HttpErrorResponse) => {
+          this.showApiError(error, 'Group request could not be reviewed.');
+        },
+      });
   }
 
   groups= signal<any[]>([]);

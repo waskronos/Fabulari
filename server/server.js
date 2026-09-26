@@ -2,9 +2,11 @@ import express from 'express';
 import cors from 'cors';
 import fs from 'fs';
 import bcrypt from 'bcryptjs';
+import 'dotenv/config';
+import { checkDatabaseHealth, connectDB } from './db.js';
 
 const app = express();
-const port = 3000;
+const port = Number(process.env.HTTP_PORT) || 3000;
 
 
 app.use(cors());
@@ -459,6 +461,28 @@ app.get('/api/channels', (req, res) => {
     });
 });
 
-app.listen(port, () => {
-  console.log(`Server running on port ${port}`);
-})
+app.get('/api/health', async (_req, res) => {
+    try {
+        await checkDatabaseHealth();
+        return res.status(200).json({server: 'ok', database: 'ok'});
+    } catch (error) {
+        console.error('Database health check failed:', error);
+        return res.status(503).json({server: 'ok', database: 'unavailable'});
+    }
+});
+
+async function startServer() {
+    try {
+        await connectDB();
+        await checkDatabaseHealth();
+
+        app.listen(port, () => {
+            console.log(`Server running on port ${port}`);
+        });
+    } catch (error) {
+        console.error('Unable to start Fabulari:', error);
+        process.exitCode = 1;
+    }
+}
+
+startServer();

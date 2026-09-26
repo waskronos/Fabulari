@@ -1,9 +1,12 @@
 {
   "name": "fabulari",
   "version": "0.0.0",
+  "type": "module",
   "scripts": {
     "ng": "ng",
     "start": "ng serve",
+    "server": "node server/server.js",
+    "server:watch": "node --watch server/server.js",
     "build": "ng build",
     "watch": "ng build --watch --configuration development",
     "test": "ng test"
@@ -19,8 +22,12 @@
     "@angular/router": "^22.1.0",
     "bcryptjs": "^3.0.3",
     "cors": "^2.8.6",
+    "dotenv": "^17.2.1",
     "express": "^5.2.1",
+    "mongodb": "^7.5.0",
     "rxjs": "~7.8.0",
+    "socket.io": "^4.8.1",
+    "socket.io-client": "^4.8.1",
     "tslib": "^2.3.0"
   },
   "devDependencies": {

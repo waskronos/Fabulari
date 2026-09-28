@@ -185,6 +185,9 @@
 
             <div class="channel-card">
               <strong>{{ channel.name }}</strong>
+              <button type="button" (click)="openChannel(group.title, channel.name)">
+                Open
+              </button>
             </div>
 
           } @empty {

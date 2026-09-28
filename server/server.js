@@ -5,10 +5,22 @@ import { promises as fsPromises } from 'fs';
 import { randomUUID } from 'crypto';
 import bcrypt from 'bcryptjs';
 import 'dotenv/config';
+import { createServer } from 'http';
+import { Server } from 'socket.io';
 import { checkDatabaseHealth, connectDB } from './db.js';
+import connectSockets from './sockets.js';
 
 const app = express();
 const port = Number(process.env.HTTP_PORT) || 3000;
+const httpServer = createServer(app);
+const io = new Server(httpServer, {
+    cors: {
+        origin: 'http://localhost:4200',
+        methods: ['GET', 'POST'],
+    },
+});
+
+connectSockets(io);
 
 function calculateAge(dateOfBirth) {
     const today = new Date();
@@ -705,7 +717,7 @@ async function startServer() {
         await connectDB();
         await checkDatabaseHealth();
 
-        app.listen(port, () => {
+        httpServer.listen(port, () => {
             console.log(`Server running on port ${port}`);
         });
     } catch (error) {

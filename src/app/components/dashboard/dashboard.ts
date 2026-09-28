@@ -231,6 +231,10 @@ export class Dashboard implements OnInit {
     
   }
 
+  openChannel(groupTitle: string, channelName: string) {
+    this.router.navigate(['/chat', groupTitle, channelName]);
+  }
+
   isGroupAdmin(group: any) {
     return group.admins.includes(this.currentuser.username);
   }

@@ -1,0 +1,48 @@
+<main class="chat-page">
+  <header class="chat-header">
+    <div>
+      <p>{{ groupTitle }}</p>
+      <h1># {{ channelName }}</h1>
+    </div>
+    <button type="button" (click)="backToDashboard()">Back to dashboard</button>
+  </header>
+
+  @if (errorMessage()) {
+    <p class="alert alert-error" role="alert">{{ errorMessage() }}</p>
+  }
+
+  @if (channelJoined()) {
+    <section class="messages" aria-live="polite">
+      @for (message of messages; track $index) {
+        <article class="message">
+          <div class="message-details">
+            <strong>{{ message.username }}</strong>
+            @if (message.isModerator) {
+              <span class="moderator">MOD</span>
+            }
+            <time>{{ message.timestamp | date:'shortTime' }}</time>
+          </div>
+          <p>{{ message.text }}</p>
+        </article>
+      } @empty {
+        <p class="empty-message">No messages yet. Start the conversation.</p>
+      }
+    </section>
+
+    <form class="message-form" (ngSubmit)="sendMessage()">
+      <label for="messageText">Message #{{ channelName }}</label>
+      <div>
+        <input
+          id="messageText"
+          name="messageText"
+          type="text"
+          [(ngModel)]="messageText"
+          autocomplete="off"
+        />
+        <button type="submit">Send</button>
+      </div>
+    </form>
+  } @else if (!errorMessage()) {
+    <p class="empty-message">Opening channel...</p>
+  }
+</main>

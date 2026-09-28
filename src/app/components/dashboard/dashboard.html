@@ -2,9 +2,9 @@
 
   @if (currentuser) {
 
-    @if (feedbackMessage) {
-      <div class="alert" [class.alert-error]="feedbackType === 'error'" role="alert">
-        {{ feedbackMessage }}
+    @if (feedbackMessage()) {
+      <div class="alert" [class.alert-error]="feedbackType() === 'error'" role="alert">
+        {{ feedbackMessage() }}
       </div>
     }
 
@@ -57,16 +57,15 @@
         <button (click)="requestGroup()">Send Request</button>
       </details>
 
-      @if (isGroupAdminOfAnyGroup()) {
-        <details>
-          <summary>Group Admin tools</summary>
+      @if (isMemberOnlyOfAnyGroup()) {
+        <details open>
+          <summary>Request a channel</summary>
 
-          <h3>Create Channel</h3>
           <label for="channelGroup">Group</label>
           <select id="channelGroup" [(ngModel)]="selectedGroupTitle">
             <option value="">Select Group</option>
             @for (group of groups(); track $index) {
-              @if (isGroupAdmin(group)) {
+              @if (isMemberOnly(group)) {
                 <option [value]="group.title">{{ group.title }}</option>
               }
             }
@@ -75,10 +74,46 @@
           <label for="channelName">Channel Name</label>
           <input id="channelName" type="text" [(ngModel)]="channelName" />
 
-          <label for="channelMinimumAge">Minimum Age</label>
-          <input id="channelMinimumAge" type="number" min="0" [(ngModel)]="channelMinimumAge" />
+          <button (click)="requestChannel()">Send Channel Request</button>
+        </details>
+      }
+
+      @if (isGroupAdminOfAnyGroup()) {
+        <details open>
+          <summary>Create a channel</summary>
+
+          <label for="adminChannelGroup">Group</label>
+          <select id="adminChannelGroup" [(ngModel)]="selectedAdminGroupTitle">
+            <option value="">Select Group</option>
+            @for (group of groups(); track $index) {
+              @if (isGroupAdmin(group)) {
+                <option [value]="group.title">{{ group.title }}</option>
+              }
+            }
+          </select>
+
+          <label for="adminChannelName">Channel Name</label>
+          <input id="adminChannelName" type="text" [(ngModel)]="adminChannelName" />
 
           <button (click)="createChannel()">Create Channel</button>
+        </details>
+
+        <details>
+          <summary>Pending channel requests ({{ channelRequests().length }})</summary>
+
+          @for (request of channelRequests(); track request.id) {
+            <div class="request-card">
+              <h3>{{ request.name }}</h3>
+              <p>Group: {{ request.groupTitle }}</p>
+              <p>Requested by: {{ request.requestedBy }}</p>
+              <button (click)="reviewChannelRequest(request.id, 'approve')">Approve</button>
+              <button class="danger-button" (click)="reviewChannelRequest(request.id, 'reject')">
+                Reject
+              </button>
+            </div>
+          } @empty {
+            <p>No pending channel requests.</p>
+          }
         </details>
       }
     }
@@ -148,25 +183,9 @@
 
           @for (channel of getChannelsForGroup(group.title); track $index) {
 
-            @if (currentuser.age >= channel.minimumAge) {
-
-              <div class="channel-card">
-
-                <strong>{{ channel.name }}</strong>
-
-                <p>
-                  Minimum Age: {{ channel.minimumAge }}
-                </p>
-
-              </div>
-
-            } @else {
-
-              <p>
-                {{ channel.name }} - Age restricted
-              </p>
-
-            }
+            <div class="channel-card">
+              <strong>{{ channel.name }}</strong>
+            </div>
 
           } @empty {
 

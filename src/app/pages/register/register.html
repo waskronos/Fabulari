@@ -2,9 +2,9 @@
     <h1>Register
     </h1>
 
-    @if (feedbackMessage) {
-        <div class="alert" [class.alert-error]="feedbackType === 'error'" role="alert">
-            {{ feedbackMessage }}
+    @if (feedbackMessage()) {
+        <div class="alert" [class.alert-error]="feedbackType() === 'error'" role="alert">
+            {{ feedbackMessage() }}
         </div>
     }
 

@@ -1,4 +1,4 @@
-import { inject, Component } from '@angular/core';
+import { inject, Component, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { HttpErrorResponse } from '@angular/common/http';
 import { User } from '../../services/user';
@@ -20,11 +20,11 @@ export class Register {
   email: string = '';
   dateOfBirth: string = '';
   password: string = '';
-  feedbackMessage: string = '';
-  feedbackType: 'success' | 'error' = 'success';
+  feedbackMessage = signal('');
+  feedbackType = signal<'success' | 'error'>('success');
 
   register() {
-    this.feedbackMessage = '';
+    this.feedbackMessage.set('');
 
     if (!this.dateOfBirth) {
       this.showFeedback('Please enter your date of birth.', 'error');
@@ -59,7 +59,7 @@ export class Register {
   }
 
   private showFeedback(message: string, type: 'success' | 'error') {
-    this.feedbackMessage = message;
-    this.feedbackType = type;
+    this.feedbackMessage.set(message);
+    this.feedbackType.set(type);
   }
 }

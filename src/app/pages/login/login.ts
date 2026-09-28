@@ -1,4 +1,4 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { User } from '../../services/user';
 import { FormsModule } from '@angular/forms';
@@ -18,10 +18,10 @@ export class Login {
   
   username: string = '';
   password: string = '';
-  feedbackMessage: string = '';
+  feedbackMessage = signal('');
   
   login(){
-    this.feedbackMessage = '';
+    this.feedbackMessage.set('');
 
     const loginData: LoginRequest = {
       username: this.username,
@@ -34,7 +34,7 @@ export class Login {
       this.router.navigate(['/dashboard']);
     },
     error: (error: HttpErrorResponse) => {
-      this.feedbackMessage = error.error?.message ?? 'Login failed. Please try again.';
+      this.feedbackMessage.set(error.error?.message ?? 'Login failed. Please try again.');
     }
     });
   }

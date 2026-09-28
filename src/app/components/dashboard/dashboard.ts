@@ -5,7 +5,9 @@ import {FormsModule} from '@angular/forms';
 import { Group } from '../../services/group';
 import {
   ApiMessage,
+  ChannelRequestData,
   GroupRequestData,
+  PendingChannelRequest,
   PendingGroupRequest,
   RequestDecision,
 } from '../../models/group.model';
@@ -18,8 +20,8 @@ import {
 })
 export class Dashboard implements OnInit {
   currentuser: any = null;
-  feedbackMessage: string = '';
-  feedbackType: 'success' | 'error' = 'success';
+  feedbackMessage = signal('');
+  feedbackType = signal<'success' | 'error'>('success');
   constructor(private router: Router) {}
 
   ngOnInit() {
@@ -41,8 +43,9 @@ export class Dashboard implements OnInit {
   minimumAge: number | null = null;
 
   channelName: string = '';
-  channelMinimumAge: number | null = null;
   selectedGroupTitle: string = '';
+  adminChannelName: string = '';
+  selectedAdminGroupTitle: string = '';
 
   private groupService = inject(Group);
 
@@ -98,6 +101,9 @@ export class Dashboard implements OnInit {
     this.groupService.getGroup().subscribe({
       next: (response) => {
         this.groups.set(response);
+        if (this.isGroupAdminOfAnyGroup()) {
+          this.loadChannelRequests();
+        }
       },
       error: (error: HttpErrorResponse) => {
         this.showApiError(error, 'Groups could not be loaded.');
@@ -130,6 +136,7 @@ export class Dashboard implements OnInit {
   }
 
   channels = signal<any[]>([]);
+  channelRequests = signal<PendingChannelRequest[]>([]);
 
   loadChannels(){
     this.groupService.getChannels().subscribe({
@@ -142,29 +149,72 @@ export class Dashboard implements OnInit {
     });
   }
 
-  createChannel() {
-    const channel = {
+  requestChannel() {
+    const request: ChannelRequestData = {
       name: this.channelName,
       groupTitle: this.selectedGroupTitle,
-      minimumAge: this.channelMinimumAge,
-      createdBy: this.currentuser.username
+      requestedBy: this.currentuser.username
     };
 
-  this.groupService.createChannel(channel).subscribe({
-    next: (response: any) => {
-      this.showFeedback(response.message, 'success');
+    this.groupService.requestChannel(request).subscribe({
+      next: (response: ApiMessage) => {
+        this.showFeedback(response.message, 'success');
 
-      this.channelName = '';
-      this.channelMinimumAge = null;
-      this.selectedGroupTitle = '';
+        this.channelName = '';
+        this.selectedGroupTitle = '';
+        if (this.isGroupAdminOfAnyGroup()) {
+          this.loadChannelRequests();
+        }
+      },
+      error: (error: HttpErrorResponse) => {
+        this.showApiError(error, 'Channel request could not be sent.');
+      }
+    });
+  }
 
-      this.loadChannels();
-    },
-    error: (error: HttpErrorResponse) => {
-      this.showApiError(error, 'Channel could not be created.');
-    }
-  });
-}
+  createChannel() {
+    this.groupService.createChannel(
+      this.adminChannelName,
+      this.selectedAdminGroupTitle,
+      this.currentuser.username
+    ).subscribe({
+      next: (response: ApiMessage) => {
+        this.adminChannelName = '';
+        this.selectedAdminGroupTitle = '';
+        this.showFeedback(response.message, 'success');
+        this.loadChannels();
+      },
+      error: (error: HttpErrorResponse) => {
+        this.showApiError(error, 'Channel could not be created.');
+      }
+    });
+  }
+
+  loadChannelRequests() {
+    this.groupService.getChannelRequests(this.currentuser.username).subscribe({
+      next: (requests) => {
+        this.channelRequests.set(requests);
+      },
+      error: (error: HttpErrorResponse) => {
+        this.showApiError(error, 'Channel requests could not be loaded.');
+      }
+    });
+  }
+
+  reviewChannelRequest(requestId: string, action: RequestDecision) {
+    this.groupService
+      .reviewChannelRequest(requestId, action, this.currentuser.username)
+      .subscribe({
+        next: (response: ApiMessage) => {
+          this.showFeedback(response.message, 'success');
+          this.loadChannelRequests();
+          this.loadChannels();
+        },
+        error: (error: HttpErrorResponse) => {
+          this.showApiError(error, 'Channel request could not be reviewed.');
+        }
+      });
+  }
 
   getChannelsForGroup(groupTitle: string) {
     const groupChannels = [];
@@ -197,6 +247,22 @@ export class Dashboard implements OnInit {
     return false;
   }
 
+  isMemberOnly(group: any) {
+    return group.members.includes(this.currentuser.username) && !this.isGroupAdmin(group);
+  }
+
+  isMemberOnlyOfAnyGroup() {
+    const allGroups = this.groups();
+
+    for (let i = 0; i < allGroups.length; i++) {
+      if (this.isMemberOnly(allGroups[i])) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
   logout() {
     localStorage.removeItem('currentUser');
     this.router.navigate(['/']);
@@ -207,7 +273,7 @@ export class Dashboard implements OnInit {
   }
 
   private showFeedback(message: string, type: 'success' | 'error') {
-    this.feedbackMessage = message;
-    this.feedbackType = type;
+    this.feedbackMessage.set(message);
+    this.feedbackType.set(type);
   }
 }

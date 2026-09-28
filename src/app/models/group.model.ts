@@ -18,6 +18,22 @@ export interface PendingGroupRequest {
   createdAt: string;
 }
 
+export interface ChannelRequestData {
+  groupTitle: string;
+  name: string;
+  requestedBy: string;
+}
+
+export interface PendingChannelRequest {
+  id: string;
+  type: 'channel';
+  groupTitle: string;
+  name: string;
+  requestedBy: string;
+  status: 'pending';
+  createdAt: string;
+}
+
 export type RequestDecision = 'approve' | 'reject';
 
 export interface ReviewGroupRequestData {

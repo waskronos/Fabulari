@@ -460,87 +460,214 @@ app.post('/api/groups/approve', (req, res) => {
     });
 });
 
-app.post('/api/channels', (req, res) => {
-    const newChannel = req.body;
+app.post('/api/channels', async (req, res) => {
+    const { name, groupTitle, createdBy } = req.body;
 
-    if(!newChannel.name ||
-       !newChannel.groupTitle ||
-       newChannel.minimumAge === null ||
-       newChannel.minimumAge === undefined ||
-       !newChannel.createdBy){
+    if (!name?.trim() || !groupTitle?.trim() || !createdBy?.trim()) {
         return res.status(400).json({message: 'All fields are mandatory!'});
     }
 
-    newChannel.name = newChannel.name.trim();
-    newChannel.groupTitle = newChannel.groupTitle.trim();
-    newChannel.createdBy = newChannel.createdBy.trim();
+    try {
+        const [groups, channels] = await Promise.all([
+            readJsonFile('./server/data/groups.json'),
+            readJsonFile('./server/data/channels.json'),
+        ]);
+        const groupFound = groups.find(
+            group => group.title.toLowerCase() === groupTitle.trim().toLowerCase()
+        );
 
-    if(!newChannel.name || !newChannel.groupTitle || !newChannel.createdBy){
-        return res.status(400).json({message: 'All fields are mandatory!'});
-    }
-
-    fs.readFile('./server/data/groups.json', 'utf8', (err, data) => {
-        if(err){
-            console.error('Error reading groups.json:', err);
-            return res.status(500).json({message: 'Internal server error'});
-        }
-
-        const groups = JSON.parse(data);
-        let groupFound = null;
-
-        for(let i = 0; i < groups.length; i++){
-            if(groups[i].title.toLowerCase() === newChannel.groupTitle.toLowerCase()){
-                groupFound = groups[i];
-                break;
-            }
-        }
-
-        if(!groupFound){
+        if (!groupFound) {
             return res.status(404).json({message: 'Group not found'});
         }
 
         const groupAdmin = groupFound.admins.find(
-            admin => admin.toLowerCase() === newChannel.createdBy.toLowerCase()
+            admin => admin.toLowerCase() === createdBy.trim().toLowerCase()
         );
-
-        if(!groupAdmin){
-            return res.status(400).json({message: 'Only the Group Admin can create rooms'});
+        if (!groupAdmin) {
+            return res.status(403).json({message: 'Only this group\'s admins can create channels'});
         }
 
-        newChannel.groupTitle = groupFound.title;
-        newChannel.createdBy = groupAdmin;
+        const cleanName = name.trim();
+        const channelExists = channels.some(channel =>
+            channel.name.toLowerCase() === cleanName.toLowerCase() &&
+            channel.groupTitle.toLowerCase() === groupFound.title.toLowerCase()
+        );
+        if (channelExists) {
+            return res.status(400).json({message: 'Channel already exists in this group'});
+        }
 
-        fs.readFile('./server/data/channels.json', 'utf8', (err, data) => {
-            if(err){
-                console.error('Error reading channels.json:', err);
-                return res.status(500).json({message: 'Internal server error'});
-            }
-
-            const channels = JSON.parse(data);
-
-            for(let i = 0; i < channels.length; i++){
-                if(channels[i].name.toLowerCase() === newChannel.name.toLowerCase() &&
-                   channels[i].groupTitle.toLowerCase() === newChannel.groupTitle.toLowerCase()){
-                    return res.status(400).json({message: 'Room already exists in this group'});
-                }
-            }
-
-            channels.push(newChannel);
-
-            const updatedData = JSON.stringify(channels, null, 2);
-
-            fs.writeFile('./server/data/channels.json', updatedData, 'utf8', (err) => {
-                if(err){
-                    console.error('Error writing to channels.json:', err);
-                    return res.status(500).json({message: 'Failed to save room data'});
-                }
-
-                return res.status(201).json({message: 'Room created successfully'});
-            });
+        channels.push({
+            name: cleanName,
+            groupTitle: groupFound.title,
+            createdBy: groupAdmin,
         });
-    });
+
+        await writeJsonFile('./server/data/channels.json', channels);
+        return res.status(201).json({message: 'Channel created successfully'});
+    } catch (error) {
+        console.error('Error creating channel:', error);
+        return res.status(500).json({message: 'Failed to create channel'});
+    }
 });
 
+app.post('/api/channel-requests', async (req, res) => {
+    const { name, groupTitle, requestedBy } = req.body;
+
+    if (!name?.trim() || !groupTitle?.trim() || !requestedBy?.trim()) {
+        return res.status(400).json({message: 'All fields are mandatory!'});
+    }
+
+    try {
+        const [users, groups, channels, requests] = await Promise.all([
+            readJsonFile('./server/data/users.json'),
+            readJsonFile('./server/data/groups.json'),
+            readJsonFile('./server/data/channels.json'),
+            readJsonFile('./server/data/requests.json'),
+        ]);
+        const requester = users.find(
+            user => user.username.toLowerCase() === requestedBy.trim().toLowerCase()
+        );
+        const groupFound = groups.find(
+            group => group.title.toLowerCase() === groupTitle.trim().toLowerCase()
+        );
+
+        if (!requester) {
+            return res.status(404).json({message: 'User not found'});
+        }
+        if (!groupFound) {
+            return res.status(404).json({message: 'Group not found'});
+        }
+        if (!groupFound.members.includes(requester.username)) {
+            return res.status(403).json({message: 'Only group members can request channels'});
+        }
+
+        const cleanName = name.trim();
+        const channelExists = channels.some(channel =>
+            channel.name.toLowerCase() === cleanName.toLowerCase() &&
+            channel.groupTitle.toLowerCase() === groupFound.title.toLowerCase()
+        );
+        if (channelExists) {
+            return res.status(400).json({message: 'Channel already exists in this group'});
+        }
+
+        const duplicateRequest = requests.some(request =>
+            request.type === 'channel' &&
+            request.status === 'pending' &&
+            request.name.toLowerCase() === cleanName.toLowerCase() &&
+            request.groupTitle.toLowerCase() === groupFound.title.toLowerCase()
+        );
+        if (duplicateRequest) {
+            return res.status(400).json({message: 'This channel request is already pending'});
+        }
+
+        requests.push({
+            id: randomUUID(),
+            type: 'channel',
+            groupTitle: groupFound.title,
+            name: cleanName,
+            requestedBy: requester.username,
+            status: 'pending',
+            createdAt: new Date().toISOString(),
+        });
+
+        await writeJsonFile('./server/data/requests.json', requests);
+        return res.status(201).json({message: 'Channel request sent to the Group Admin'});
+    } catch (error) {
+        console.error('Error creating channel request:', error);
+        return res.status(500).json({message: 'Failed to save channel request'});
+    }
+});
+
+app.get('/api/channel-requests', async (req, res) => {
+    const username = String(req.query.username ?? '').trim().toLowerCase();
+
+    try {
+        const [groups, requests] = await Promise.all([
+            readJsonFile('./server/data/groups.json'),
+            readJsonFile('./server/data/requests.json'),
+        ]);
+        const adminGroupTitles = groups
+            .filter(group => group.admins.some(admin => admin.toLowerCase() === username))
+            .map(group => group.title.toLowerCase());
+
+        const pendingRequests = requests.filter(request =>
+            request.type === 'channel' &&
+            request.status === 'pending' &&
+            adminGroupTitles.includes(request.groupTitle.toLowerCase())
+        );
+
+        return res.status(200).json(pendingRequests);
+    } catch (error) {
+        console.error('Error loading channel requests:', error);
+        return res.status(500).json({message: 'Failed to load channel requests'});
+    }
+});
+
+app.patch('/api/channel-requests/:requestId', async (req, res) => {
+    const { action, reviewedBy } = req.body;
+
+    if (!['approve', 'reject'].includes(action)) {
+        return res.status(400).json({message: 'Action must be approve or reject'});
+    }
+
+    try {
+        const [groups, channels, requests] = await Promise.all([
+            readJsonFile('./server/data/groups.json'),
+            readJsonFile('./server/data/channels.json'),
+            readJsonFile('./server/data/requests.json'),
+        ]);
+        const request = requests.find(item =>
+            item.id === req.params.requestId &&
+            item.type === 'channel' &&
+            item.status === 'pending'
+        );
+
+        if (!request) {
+            return res.status(404).json({message: 'Pending channel request not found'});
+        }
+
+        const groupFound = groups.find(group => group.title === request.groupTitle);
+        if (!groupFound) {
+            return res.status(404).json({message: 'Group not found'});
+        }
+
+        const groupAdmin = groupFound.admins.find(
+            admin => admin.toLowerCase() === String(reviewedBy ?? '').trim().toLowerCase()
+        );
+        if (!groupAdmin) {
+            return res.status(403).json({message: 'Only this group\'s admins can review the request'});
+        }
+
+        if (action === 'approve') {
+            const channelExists = channels.some(channel =>
+                channel.name.toLowerCase() === request.name.toLowerCase() &&
+                channel.groupTitle.toLowerCase() === request.groupTitle.toLowerCase()
+            );
+            if (channelExists) {
+                return res.status(400).json({message: 'Channel already exists in this group'});
+            }
+
+            channels.push({
+                name: request.name,
+                groupTitle: request.groupTitle,
+                createdBy: request.requestedBy,
+            });
+            await writeJsonFile('./server/data/channels.json', channels);
+        }
+
+        request.status = action === 'approve' ? 'approved' : 'rejected';
+        request.reviewedBy = groupAdmin;
+        request.reviewedAt = new Date().toISOString();
+        await writeJsonFile('./server/data/requests.json', requests);
+
+        return res.status(200).json({
+            message: action === 'approve' ? 'Channel request approved' : 'Channel request rejected'
+        });
+    } catch (error) {
+        console.error('Error reviewing channel request:', error);
+        return res.status(500).json({message: 'Failed to review channel request'});
+    }
+});
 
 app.get('/api/channels', (req, res) => {
     fs.readFile('./server/data/channels.json', 'utf8', (err, data) => {

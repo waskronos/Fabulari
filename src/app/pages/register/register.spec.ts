@@ -32,8 +32,8 @@ describe('Register', () => {
 
     component.register();
 
-    expect(component.feedbackMessage).toBe('Date of birth cannot be in the future.');
-    expect(component.feedbackType).toBe('error');
+    expect(component.feedbackMessage()).toBe('Date of birth cannot be in the future.');
+    expect(component.feedbackType()).toBe('error');
     expect(registerUser).not.toHaveBeenCalled();
   });
 });

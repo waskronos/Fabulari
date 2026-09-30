@@ -52,6 +52,9 @@ export class Chat implements OnInit, OnDestroy {
         this.messages.push(message);
         this.errorMessage.set('');
       }),
+      this.socketService.getHistory().subscribe(messages => {
+        this.messages = messages;
+      }),
       this.socketService.getJoined().subscribe(() => {
         this.channelJoined.set(true);
         this.errorMessage.set('');

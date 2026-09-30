@@ -34,6 +34,15 @@ export class SocketService {
     });
   }
 
+  getHistory() {
+    return new Observable<ChatMessage[]>(observer => {
+      const historyHandler = (messages: ChatMessage[]) => observer.next(messages);
+      this.socket?.on('chat-history', historyHandler);
+
+      return () => this.socket?.off('chat-history', historyHandler);
+    });
+  }
+
   getJoined() {
     return new Observable<void>(observer => {
       const joinedHandler = () => observer.next();

@@ -70,6 +70,15 @@ export default function connectSockets(io) {
                 const roomName = getRoomName(access.groupTitle, access.channelName);
                 socket.join(roomName);
                 socket.data.channel = { ...access, roomName };
+                const messages = await getDB().collection('messages')
+                    .find({
+                        groupTitle: access.groupTitle,
+                        channelName: access.channelName,
+                    })
+                    .sort({ timestamp: -1 })
+                    .limit(5)
+                    .toArray();
+                socket.emit('chat-history', messages.reverse());
                 socket.emit('channel-joined');
             } catch (error) {
                 console.error('Error joining channel:', error);
@@ -77,7 +86,7 @@ export default function connectSockets(io) {
             }
         });
 
-        socket.on('send-message', messageText => {
+        socket.on('send-message', async messageText => {
             const channel = socket.data.channel;
             const text = String(messageText ?? '').trim();
 
@@ -91,14 +100,22 @@ export default function connectSockets(io) {
                 return;
             }
 
-            io.to(channel.roomName).emit('new-message', {
-                groupTitle: channel.groupTitle,
-                channelName: channel.channelName,
-                username: channel.username,
-                text,
-                timestamp: new Date().toISOString(),
-                isModerator: channel.isModerator,
-            });
+            try {
+                const message = {
+                    groupTitle: channel.groupTitle,
+                    channelName: channel.channelName,
+                    username: channel.username,
+                    text,
+                    timestamp: new Date(),
+                    isModerator: channel.isModerator,
+                };
+
+                await getDB().collection('messages').insertOne(message);
+                io.to(channel.roomName).emit('new-message', message);
+            } catch (error) {
+                console.error('Error saving message:', error);
+                socket.emit('chat-error', 'Message could not be sent');
+            }
         });
     });
 }

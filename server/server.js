@@ -7,7 +7,7 @@ import bcrypt from 'bcryptjs';
 import 'dotenv/config';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
-import { checkDatabaseHealth, connectDB, seedDatabase } from './db.js';
+import { checkDatabaseHealth, connectDB, getDB, seedDatabase } from './db.js';
 import connectSockets from './sockets.js';
 
 const app = express();
@@ -182,15 +182,14 @@ app.post('/api/login', (req, res) => {
 });
 
 
-app.get('/api/groups', (req, res) => {
-    fs.readFile('./server/data/groups.json', 'utf8', (err, data) => {
-        if(err){
-            console.error('Error reading groups.json:', err);
-            return res.status(500).json({message: 'Internal server error'});
-        }
-        const groups = JSON.parse(data);
+app.get('/api/groups', async (_req, res) => {
+    try {
+        const groups = await getDB().collection('groups').find().toArray();
         return res.status(200).json(groups);
-    });
+    } catch (error) {
+        console.error('Error loading groups:', error);
+        return res.status(500).json({message: 'Internal server error'});
+    }
 });
 
 app.post('/api/group-requests', async (req, res) => {
@@ -481,8 +480,8 @@ app.post('/api/channels', async (req, res) => {
 
     try {
         const [groups, channels] = await Promise.all([
-            readJsonFile('./server/data/groups.json'),
-            readJsonFile('./server/data/channels.json'),
+            getDB().collection('groups').find().toArray(),
+            getDB().collection('channels').find().toArray(),
         ]);
         const groupFound = groups.find(
             group => group.title.toLowerCase() === groupTitle.trim().toLowerCase()
@@ -508,13 +507,12 @@ app.post('/api/channels', async (req, res) => {
             return res.status(400).json({message: 'Channel already exists in this group'});
         }
 
-        channels.push({
+        await getDB().collection('channels').insertOne({
             name: cleanName,
             groupTitle: groupFound.title,
             createdBy: groupAdmin,
         });
 
-        await writeJsonFile('./server/data/channels.json', channels);
         return res.status(201).json({message: 'Channel created successfully'});
     } catch (error) {
         console.error('Error creating channel:', error);
@@ -681,16 +679,14 @@ app.patch('/api/channel-requests/:requestId', async (req, res) => {
     }
 });
 
-app.get('/api/channels', (req, res) => {
-    fs.readFile('./server/data/channels.json', 'utf8', (err, data) => {
-        if(err){
-            console.error('Error reading channels.json:', err);
-            return res.status(500).json({message: 'Internal server error'});
-        }
-
-        const channels = JSON.parse(data);
+app.get('/api/channels', async (_req, res) => {
+    try {
+        const channels = await getDB().collection('channels').find().toArray();
         return res.status(200).json(channels);
-    });
+    } catch (error) {
+        console.error('Error loading channels:', error);
+        return res.status(500).json({message: 'Internal server error'});
+    }
 });
 
 app.get('/api/health', async (_req, res) => {

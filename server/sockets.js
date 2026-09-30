@@ -1,18 +1,15 @@
-import { promises as fs } from 'fs';
+import { getDB } from './db.js';
 
 function getRoomName(groupTitle, channelName) {
     return `${groupTitle.toLowerCase()}:${channelName.toLowerCase()}`;
 }
 
 async function getChannelAccess(groupTitle, channelName, username) {
-    const [usersData, groupsData, channelsData] = await Promise.all([
-        fs.readFile('./server/data/users.json', 'utf8'),
-        fs.readFile('./server/data/groups.json', 'utf8'),
-        fs.readFile('./server/data/channels.json', 'utf8'),
+    const [users, groups, channels] = await Promise.all([
+        getDB().collection('users').find().toArray(),
+        getDB().collection('groups').find().toArray(),
+        getDB().collection('channels').find().toArray(),
     ]);
-    const users = JSON.parse(usersData);
-    const groups = JSON.parse(groupsData);
-    const channels = JSON.parse(channelsData);
     const cleanGroupTitle = groupTitle.trim().toLowerCase();
     const cleanChannelName = channelName.trim().toLowerCase();
     const cleanUsername = username.trim().toLowerCase();

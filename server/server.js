@@ -7,7 +7,7 @@ import bcrypt from 'bcryptjs';
 import 'dotenv/config';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
-import { checkDatabaseHealth, connectDB } from './db.js';
+import { checkDatabaseHealth, connectDB, seedDatabase } from './db.js';
 import connectSockets from './sockets.js';
 
 const app = express();
@@ -716,6 +716,7 @@ async function startServer() {
     try {
         await connectDB();
         await checkDatabaseHealth();
+        await seedDatabase();
 
         httpServer.listen(port, () => {
             console.log(`Server running on port ${port}`);

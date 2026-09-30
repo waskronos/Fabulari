@@ -1,7 +1,5 @@
 import express from 'express';
 import cors from 'cors';
-import fs from 'fs';
-import { promises as fsPromises } from 'fs';
 import { randomUUID } from 'crypto';
 import bcrypt from 'bcryptjs';
 import 'dotenv/config';
@@ -40,7 +38,7 @@ function calculateAge(dateOfBirth) {
 app.use(cors());
 app.use(express.json());
 
-app.post('/api/users', (req, res) => {
+app.post('/api/users', async (req, res) => {
     const newUser = req.body;
     if (!newUser.username ||
          !newUser.firstName ||
@@ -70,16 +68,8 @@ app.post('/api/users', (req, res) => {
         return res.status(400).json({message: 'Please enter a valid date of birth'});
     }
 
-    fs.readFile('./server/data/users.json', 'utf8', async (err, data) => {
-        if(err){
-            console.error('Error reading users.json:', err);
-            return;
-        }
-
-        const users = JSON.parse(data);
-
-        let emailExists = false;
-        let usernameExists = false;
+    try {
+        const users = await getDB().collection('users').find().toArray();
         newUser.email = newUser.email.trim().toLowerCase();
         newUser.username = newUser.username.trim();
         newUser.firstName = newUser.firstName.trim();
@@ -91,20 +81,16 @@ app.post('/api/users', (req, res) => {
            !newUser.email){
             return res.status(400).json({message: 'All fields are mandatory!'})};
 
-        for(let i = 0; i < users.length; i++){
-            if(users[i].email === newUser.email){
-                emailExists = true;
-            }
-            if(users[i].username.toLowerCase() === newUser.username.toLowerCase()){
-                usernameExists = true;
-            }
+        const emailExists = users.some(user => user.email === newUser.email);
+        const usernameExists = users.some(
+            user => user.username.toLowerCase() === newUser.username.toLowerCase()
+        );
 
-            if(emailExists){
-                return res.status(400).json({message: 'Email already exists'});
-            }
-            if(usernameExists){
-                return res.status(400).json({message: 'Username already exists'});
-            }
+        if(emailExists){
+            return res.status(400).json({message: 'Email already exists'});
+        }
+        if(usernameExists){
+            return res.status(400).json({message: 'Username already exists'});
         }
 
         if (users.length === 0)
@@ -117,68 +103,52 @@ app.post('/api/users', (req, res) => {
              const hashedPassword = await bcrypt.hash(newUser.password, 10);
              newUser.password = hashedPassword;
              
-             users.push(newUser);
-
-             const updatedData = JSON.stringify(users, null, 2);
-             
-             fs.writeFile('./server/data/users.json', updatedData, 'utf8', (err) => {
-                if(err){
-                console.error('Error writing to users.json:', err);
-                return res.status(500).json({message: 'Failed to save user data'});}
-                
-                console.log('User added successfully');
-                res.json({
-                message: 'User added successfully'
-            });
-        });
-    });
-});
-
-fs.readFile('./server/data/users.json', 'utf8', (err, data) => {
-    if (err) {
-        console.error('Error reading users.json:', err);
-        return;
+             await getDB().collection('users').insertOne(newUser);
+             return res.json({message: 'User added successfully'});
+    } catch (error) {
+        console.error('Error creating user:', error);
+        return res.status(500).json({message: 'Failed to save user data'});
     }
 });
 
-app.post('/api/login', (req, res) => {
+app.post('/api/login', async (req, res) => {
     const loginData = req.body;
 
     if (!loginData.username || !loginData.password) {
         return res.status(400).json({ message: 'Please fill both fields' });
     }
 
-    fs.readFile('./server/data/users.json', 'utf8', async (err, data) => {
-        if (err) {
-            console.error('Error reading users.json:', err);
-            return res.status(500).json({ message: 'Internal server error' });
+    try {
+        const users = await getDB().collection('users').find().toArray();
+        const user = users.find(
+            item => item.username.toLowerCase() === loginData.username.toLowerCase()
+        );
+
+        if (!user) {
+            return res.status(401).json({ message: 'Invalid credentials' });
         }
 
-        const users = JSON.parse(data);
-        for(let i = 0; i < users.length; i++){
-            if(users[i].username.toLowerCase() === loginData.username.toLowerCase()){
-                const passwordMatch = await bcrypt.compare(loginData.password, users[i].password);
-                if (passwordMatch) {
-                    return res.json({ message: 'Login successful' ,
-                        user: {
-                            username: users[i].username,
-                            firstName: users[i].firstName,
-                            lastName: users[i].lastName,
-                            email: users[i].email,
-                            dateOfBirth: users[i].dateOfBirth,
-                            age: users[i].dateOfBirth
-                                ? calculateAge(users[i].dateOfBirth)
-                                : users[i].age,
-                            role: users[i].role }
-                });
-                }
-                else {
-                    return res.status(401).json({ message: 'Invalid credentials' });
-                }
-            }
-        }
+        const passwordMatch = await bcrypt.compare(loginData.password, user.password);
+        if (!passwordMatch) {
             return res.status(401).json({ message: 'Invalid credentials' });
-    });
+        }
+
+        return res.json({
+            message: 'Login successful',
+            user: {
+                username: user.username,
+                firstName: user.firstName,
+                lastName: user.lastName,
+                email: user.email,
+                dateOfBirth: user.dateOfBirth,
+                age: user.dateOfBirth ? calculateAge(user.dateOfBirth) : user.age,
+                role: user.role,
+            },
+        });
+    } catch (error) {
+        console.error('Error logging in:', error);
+        return res.status(500).json({ message: 'Internal server error' });
+    }
 });
 
 
@@ -216,9 +186,9 @@ app.post('/api/group-requests', async (req, res) => {
 
     try {
         const [users, groups, requests] = await Promise.all([
-            readJsonFile('./server/data/users.json'),
-            readJsonFile('./server/data/groups.json'),
-            readJsonFile('./server/data/requests.json'),
+            getDB().collection('users').find().toArray(),
+            getDB().collection('groups').find().toArray(),
+            getDB().collection('requests').find().toArray(),
         ]);
         const requester = users.find(
             user => user.username.toLowerCase() === requestedBy.trim().toLowerCase()
@@ -243,7 +213,7 @@ app.post('/api/group-requests', async (req, res) => {
             return res.status(400).json({message: 'A request for this group title is already pending'});
         }
 
-        requests.push({
+        await getDB().collection('requests').insertOne({
             id: randomUUID(),
             type: 'group',
             title: cleanTitle,
@@ -254,7 +224,6 @@ app.post('/api/group-requests', async (req, res) => {
             createdAt: new Date().toISOString(),
         });
 
-        await writeJsonFile('./server/data/requests.json', requests);
         return res.status(201).json({message: 'Group request sent to the Super Admin'});
     } catch (error) {
         console.error('Error creating group request:', error);
@@ -267,8 +236,8 @@ app.get('/api/group-requests', async (req, res) => {
 
     try {
         const [users, requests] = await Promise.all([
-            readJsonFile('./server/data/users.json'),
-            readJsonFile('./server/data/requests.json'),
+            getDB().collection('users').find().toArray(),
+            getDB().collection('requests').find().toArray(),
         ]);
         const currentUser = users.find(
             user => user.username.toLowerCase() === username.toLowerCase()
@@ -296,9 +265,9 @@ app.patch('/api/group-requests/:requestId', async (req, res) => {
 
     try {
         const [users, groups, requests] = await Promise.all([
-            readJsonFile('./server/data/users.json'),
-            readJsonFile('./server/data/groups.json'),
-            readJsonFile('./server/data/requests.json'),
+            getDB().collection('users').find().toArray(),
+            getDB().collection('groups').find().toArray(),
+            getDB().collection('requests').find().toArray(),
         ]);
         const reviewer = users.find(
             user => user.username.toLowerCase() === String(reviewedBy ?? '').trim().toLowerCase()
@@ -323,7 +292,7 @@ app.patch('/api/group-requests/:requestId', async (req, res) => {
                 return res.status(404).json({message: 'Requesting user no longer exists'});
             }
 
-            groups.push({
+            await getDB().collection('groups').insertOne({
                 title: request.title,
                 description: request.description,
                 minimumAge: request.minimumAge,
@@ -331,14 +300,18 @@ app.patch('/api/group-requests/:requestId', async (req, res) => {
                 members: [requester.username],
                 joinRequests: [],
             });
-
-            await writeJsonFile('./server/data/groups.json', groups);
         }
 
-        request.status = action === 'approve' ? 'approved' : 'rejected';
-        request.reviewedBy = reviewer.username;
-        request.reviewedAt = new Date().toISOString();
-        await writeJsonFile('./server/data/requests.json', requests);
+        await getDB().collection('requests').updateOne(
+            { id: request.id },
+            {
+                $set: {
+                    status: action === 'approve' ? 'approved' : 'rejected',
+                    reviewedBy: reviewer.username,
+                    reviewedAt: new Date().toISOString(),
+                },
+            }
+        );
 
         return res.status(200).json({
             message: action === 'approve' ? 'Group request approved' : 'Group request rejected'
@@ -349,101 +322,71 @@ app.patch('/api/group-requests/:requestId', async (req, res) => {
     }
 });
 
-app.post('/api/groups/join', (req, res) => {
+app.post('/api/groups/join', async (req, res) => {
     const joinData = req.body;
     if(!joinData.title || !joinData.username) {
         return res.status(400).json({message: 'Group title and username are required'});
     }  
 
-    fs.readFile('./server/data/users.json', 'utf8', (err, data) => {
-        if(err){
-            console.error('Error reading user.json:', err);
-            return res.status(500).json({message: 'Internal server error'});
-        }
-
-        const users = JSON.parse(data);
-        let userFound = null;
-        for(let i = 0; i < users.length; i++){
-            if(users[i].username.toLowerCase() === joinData.username.toLowerCase()){
-                userFound = users[i];
-                break;
-            }
-        } if(!userFound) {
+    try {
+        const [users, groups] = await Promise.all([
+            getDB().collection('users').find().toArray(),
+            getDB().collection('groups').find().toArray(),
+        ]);
+        const userFound = users.find(
+            user => user.username.toLowerCase() === joinData.username.toLowerCase()
+        );
+        if(!userFound) {
             return res.status(404).json({message: 'User not found'});
         }
 
-        fs.readFile('./server/data/groups.json', 'utf8', (err, data) => {
-            if(err){
-                console.error('Error reading groups.json:', err);
-                return res.status(500).json({message: 'Internal server error'});
-            }
-
-            const groups = JSON.parse(data);
-            let groupFound = null;
-            for (let i = 0; i < groups.length; i++){
-                if(groups[i].title.toLowerCase() === joinData.title.toLowerCase()){
-                    groupFound = groups[i];
-                    break;
-                }
-            } if(!groupFound) {
+        const groupFound = groups.find(
+            group => group.title.toLowerCase() === joinData.title.toLowerCase()
+        );
+        if(!groupFound) {
                 return res.status(404).json({message: 'Group not found'});
-            }
+        }
 
-            const userAge = userFound.dateOfBirth
-                ? calculateAge(userFound.dateOfBirth)
-                : userFound.age;
+        const userAge = userFound.dateOfBirth
+            ? calculateAge(userFound.dateOfBirth)
+            : userFound.age;
 
-            if(userAge < groupFound.minimumAge){
-                return res.status(400).json({message: 'User does not meet the minimum age requirement for this group'});
-            }
+        if(userAge < groupFound.minimumAge){
+            return res.status(400).json({message: 'User does not meet the minimum age requirement for this group'});
+        }
 
-            if(groupFound.members.includes(userFound.username)){
-                return res.status(400).json({message: 'User is already a member of this group'});
-            }
+        if(groupFound.members.includes(userFound.username)){
+            return res.status(400).json({message: 'User is already a member of this group'});
+        }
 
-            if(groupFound.joinRequests.includes(userFound.username)){
-                return res.status(400).json({message: 'User has already requested to join this group'});
-            }
-            
-            groupFound.joinRequests.push(userFound.username);
+        if(groupFound.joinRequests.includes(userFound.username)){
+            return res.status(400).json({message: 'User has already requested to join this group'});
+        }
 
-            const updatedGroupsData = JSON.stringify(groups, null, 2);
-
-            fs.writeFile('./server/data/groups.json', updatedGroupsData, 'utf8', (err) => {
-                if(err){
-                    console.error('Error writing to groups.json:', err);
-                    return res.status(500).json({message: 'Failed to update group data'});
-                }
-
-                return res.status(200).json({message: 'Join request sent successfully'});
-            });
-        });
-    });
+        await getDB().collection('groups').updateOne(
+            { _id: groupFound._id },
+            { $push: { joinRequests: userFound.username } }
+        );
+        return res.status(200).json({message: 'Join request sent successfully'});
+    } catch (error) {
+        console.error('Error requesting group membership:', error);
+        return res.status(500).json({message: 'Failed to update group data'});
+    }
 });
 
 
-app.post('/api/groups/approve', (req, res) => {
+app.post('/api/groups/approve', async (req, res) => {
     const approvalData = req.body;
 
     if(!approvalData.title || !approvalData.username){
         return res.status(400).json({message: 'Group title and username are required'});
     }
 
-    fs.readFile('./server/data/groups.json', 'utf8', (err, data) => {
-        if(err){
-            console.error('Error reading groups.json:', err);
-            return res.status(500).json({message: 'Internal server error'});
-        }
-
-        const groups = JSON.parse(data);
-        let groupFound = null;
-
-        for(let i = 0; i < groups.length; i++){
-            if(groups[i].title.toLowerCase() === approvalData.title.toLowerCase()){
-                groupFound = groups[i];
-                break;
-            }
-        }
+    try {
+        const groups = await getDB().collection('groups').find().toArray();
+        const groupFound = groups.find(
+            group => group.title.toLowerCase() === approvalData.title.toLowerCase()
+        );
 
         if(!groupFound){
             return res.status(404).json({message: 'Group not found'});
@@ -455,20 +398,18 @@ app.post('/api/groups/approve', (req, res) => {
             return res.status(400).json({message: 'No join request from this user'});
         }
 
-        groupFound.joinRequests.splice(requestIndex, 1);
-        groupFound.members.push(approvalData.username);
-
-        const updatedGroupsData = JSON.stringify(groups, null, 2);
-
-        fs.writeFile('./server/data/groups.json', updatedGroupsData, 'utf8', (err) => {
-            if(err){
-                console.error('Error writing to groups.json:', err);
-                return res.status(500).json({message: 'Failed to update group data'});
+        await getDB().collection('groups').updateOne(
+            { _id: groupFound._id },
+            {
+                $pull: { joinRequests: approvalData.username },
+                $addToSet: { members: approvalData.username },
             }
-
-            return res.status(200).json({message: 'User added to group successfully'});
-        });
-    });
+        );
+        return res.status(200).json({message: 'User added to group successfully'});
+    } catch (error) {
+        console.error('Error approving group membership:', error);
+        return res.status(500).json({message: 'Failed to update group data'});
+    }
 });
 
 app.post('/api/channels', async (req, res) => {
@@ -529,10 +470,10 @@ app.post('/api/channel-requests', async (req, res) => {
 
     try {
         const [users, groups, channels, requests] = await Promise.all([
-            readJsonFile('./server/data/users.json'),
-            readJsonFile('./server/data/groups.json'),
-            readJsonFile('./server/data/channels.json'),
-            readJsonFile('./server/data/requests.json'),
+            getDB().collection('users').find().toArray(),
+            getDB().collection('groups').find().toArray(),
+            getDB().collection('channels').find().toArray(),
+            getDB().collection('requests').find().toArray(),
         ]);
         const requester = users.find(
             user => user.username.toLowerCase() === requestedBy.trim().toLowerCase()
@@ -570,7 +511,7 @@ app.post('/api/channel-requests', async (req, res) => {
             return res.status(400).json({message: 'This channel request is already pending'});
         }
 
-        requests.push({
+        await getDB().collection('requests').insertOne({
             id: randomUUID(),
             type: 'channel',
             groupTitle: groupFound.title,
@@ -580,7 +521,6 @@ app.post('/api/channel-requests', async (req, res) => {
             createdAt: new Date().toISOString(),
         });
 
-        await writeJsonFile('./server/data/requests.json', requests);
         return res.status(201).json({message: 'Channel request sent to the Group Admin'});
     } catch (error) {
         console.error('Error creating channel request:', error);
@@ -593,8 +533,8 @@ app.get('/api/channel-requests', async (req, res) => {
 
     try {
         const [groups, requests] = await Promise.all([
-            readJsonFile('./server/data/groups.json'),
-            readJsonFile('./server/data/requests.json'),
+            getDB().collection('groups').find().toArray(),
+            getDB().collection('requests').find().toArray(),
         ]);
         const adminGroupTitles = groups
             .filter(group => group.admins.some(admin => admin.toLowerCase() === username))
@@ -622,9 +562,9 @@ app.patch('/api/channel-requests/:requestId', async (req, res) => {
 
     try {
         const [groups, channels, requests] = await Promise.all([
-            readJsonFile('./server/data/groups.json'),
-            readJsonFile('./server/data/channels.json'),
-            readJsonFile('./server/data/requests.json'),
+            getDB().collection('groups').find().toArray(),
+            getDB().collection('channels').find().toArray(),
+            getDB().collection('requests').find().toArray(),
         ]);
         const request = requests.find(item =>
             item.id === req.params.requestId &&
@@ -657,18 +597,23 @@ app.patch('/api/channel-requests/:requestId', async (req, res) => {
                 return res.status(400).json({message: 'Channel already exists in this group'});
             }
 
-            channels.push({
+            await getDB().collection('channels').insertOne({
                 name: request.name,
                 groupTitle: request.groupTitle,
                 createdBy: request.requestedBy,
             });
-            await writeJsonFile('./server/data/channels.json', channels);
         }
 
-        request.status = action === 'approve' ? 'approved' : 'rejected';
-        request.reviewedBy = groupAdmin;
-        request.reviewedAt = new Date().toISOString();
-        await writeJsonFile('./server/data/requests.json', requests);
+        await getDB().collection('requests').updateOne(
+            { id: request.id },
+            {
+                $set: {
+                    status: action === 'approve' ? 'approved' : 'rejected',
+                    reviewedBy: groupAdmin,
+                    reviewedAt: new Date().toISOString(),
+                },
+            }
+        );
 
         return res.status(200).json({
             message: action === 'approve' ? 'Channel request approved' : 'Channel request rejected'
@@ -698,15 +643,6 @@ app.get('/api/health', async (_req, res) => {
         return res.status(503).json({server: 'ok', database: 'unavailable'});
     }
 });
-
-async function readJsonFile(path) {
-    const data = await fsPromises.readFile(path, 'utf8');
-    return JSON.parse(data);
-}
-
-async function writeJsonFile(path, value) {
-    await fsPromises.writeFile(path, JSON.stringify(value, null, 2), 'utf8');
-}
 
 async function startServer() {
     try {

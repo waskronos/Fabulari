@@ -1,208 +1,263 @@
-<div class="dashboard">
-
-  @if (currentuser) {
-
-    @if (feedbackMessage()) {
-      <div class="alert" [class.alert-error]="feedbackType() === 'error'" role="alert">
-        {{ feedbackMessage() }}
+@if (currentuser) {
+  <div class="dashboard-shell">
+    <aside class="sidebar">
+      <div class="sidebar-profile">
+        <div class="avatar">{{ getInitials() }}</div>
+        <div>
+          <strong>{{ currentuser.firstName }} {{ currentuser.lastName }}</strong>
+          <span>&#64;{{ currentuser.username }}</span>
+        </div>
       </div>
-    }
 
-    <h1>Welcome, {{ currentuser.firstName }}</h1>
-    <p>Logged in as: {{ currentuser.username }}</p>
-    <p>Role: {{ currentuser.role }}</p>
+      <a class="sidebar-link" href="#home">Home</a>
 
-    <button (click)="logout()">Logout</button>
+      @if (currentuser.role !== 'superAdmin') {
+        <div class="sidebar-heading">
+          <span>Your groups</span>
+          <span>{{ getJoinedGroups().length }}</span>
+        </div>
 
+        <div class="group-list">
+          @for (group of getJoinedGroups(); track group.title) {
+            <div class="sidebar-group">
+              <strong>{{ group.title }}</strong>
 
-    @if (currentuser.role === 'superAdmin') {
+              @for (channel of getChannelsForGroup(group.title); track channel.name) {
+                <button type="button" (click)="openChannel(group.title, channel.name)">
+                  <span>#</span> {{ channel.name }}
+                </button>
+              } @empty {
+                <small>No channels yet</small>
+              }
+            </div>
+          } @empty {
+            <p class="empty-sidebar">No groups joined yet.</p>
+          }
+        </div>
 
-      <h2>Super Admin</h2>
+        <a class="sidebar-link" href="#discover-groups">Discover groups</a>
+        <a class="sidebar-link" href="#request-group">Request a group</a>
+      } @else {
+        <a class="sidebar-link" href="#admin-workspace">Admin workspace</a>
+      }
+    </aside>
 
-      <details open>
-        <summary>Pending group requests ({{ groupRequests().length }})</summary>
+    <main class="dashboard" id="home">
+      @if (feedbackMessage()) {
+        <div class="alert" [class.alert-error]="feedbackType() === 'error'" role="alert">
+          {{ feedbackMessage() }}
+        </div>
+      }
 
-        @for (request of groupRequests(); track request.id) {
-          <div class="request-card">
-            <h3>{{ request.title }}</h3>
-            <p>{{ request.description }}</p>
-            <p>Requested by: {{ request.requestedBy }}</p>
-            <p>Minimum age: {{ request.minimumAge }}</p>
-            <button (click)="reviewGroupRequest(request.id, 'approve')">Approve</button>
-            <button class="danger-button" (click)="reviewGroupRequest(request.id, 'reject')">
-              Reject
-            </button>
+      <section class="profile-card">
+        <div>
+          <p class="eyebrow">Your dashboard</p>
+          <h1>Welcome back, {{ currentuser.firstName }}</h1>
+          <p>Find your groups, open a channel and continue the conversation.</p>
+        </div>
+
+        <div class="profile-details">
+          <div class="avatar avatar-large">{{ getInitials() }}</div>
+          <div>
+            <strong>{{ currentuser.firstName }} {{ currentuser.lastName }}</strong>
+            <span>&#64;{{ currentuser.username }}</span>
+            <span class="role-badge">{{ getRoleName() }}</span>
           </div>
-        } @empty {
-          <p>No pending group requests.</p>
-        }
-      </details>
-    } @else {
-      <details>
-        <summary>Request a new group</summary>
+          <button class="secondary-button" (click)="logout()">Logout</button>
+        </div>
+      </section>
 
-        <label for="groupTitle">Group Title</label>
-        <input id="groupTitle" type="text" [(ngModel)]="groupTitle" maxlength="30" />
-
-        <label for="groupDescription">Description</label>
-        <textarea
-          id="groupDescription"
-          [(ngModel)]="groupDescription"
-          maxlength="250">
-        </textarea>
-
-        <label for="groupMinimumAge">Minimum Age</label>
-        <input id="groupMinimumAge" type="number" min="0" [(ngModel)]="minimumAge" />
-
-        <button (click)="requestGroup()">Send Request</button>
-      </details>
-
-      @if (isMemberOnlyOfAnyGroup()) {
-        <details open>
-          <summary>Request a channel</summary>
-
-          <label for="channelGroup">Group</label>
-          <select id="channelGroup" [(ngModel)]="selectedGroupTitle">
-            <option value="">Select Group</option>
-            @for (group of groups(); track $index) {
-              @if (isMemberOnly(group)) {
-                <option [value]="group.title">{{ group.title }}</option>
-              }
-            }
-          </select>
-
-          <label for="channelName">Channel Name</label>
-          <input id="channelName" type="text" [(ngModel)]="channelName" />
-
-          <button (click)="requestChannel()">Send Channel Request</button>
-        </details>
-      }
-
-      @if (isGroupAdminOfAnyGroup()) {
-        <details open>
-          <summary>Create a channel</summary>
-
-          <label for="adminChannelGroup">Group</label>
-          <select id="adminChannelGroup" [(ngModel)]="selectedAdminGroupTitle">
-            <option value="">Select Group</option>
-            @for (group of groups(); track $index) {
-              @if (isGroupAdmin(group)) {
-                <option [value]="group.title">{{ group.title }}</option>
-              }
-            }
-          </select>
-
-          <label for="adminChannelName">Channel Name</label>
-          <input id="adminChannelName" type="text" [(ngModel)]="adminChannelName" />
-
-          <button (click)="createChannel()">Create Channel</button>
-        </details>
-
-        <details>
-          <summary>Pending channel requests ({{ channelRequests().length }})</summary>
-
-          @for (request of channelRequests(); track request.id) {
-            <div class="request-card">
-              <h3>{{ request.name }}</h3>
-              <p>Group: {{ request.groupTitle }}</p>
-              <p>Requested by: {{ request.requestedBy }}</p>
-              <button (click)="reviewChannelRequest(request.id, 'approve')">Approve</button>
-              <button class="danger-button" (click)="reviewChannelRequest(request.id, 'reject')">
-                Reject
-              </button>
+      @if (currentuser.role === 'superAdmin') {
+        <section class="content-section" id="admin-workspace">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Administration</p>
+              <h2>Group requests</h2>
             </div>
-          } @empty {
-            <p>No pending channel requests.</p>
-          }
-        </details>
-      }
-    }
+            <span class="count-badge">{{ groupRequests().length }} pending</span>
+          </div>
 
+          <div class="card-grid">
+            @for (request of groupRequests(); track request.id) {
+              <article class="request-card">
+                <h3>{{ request.title }}</h3>
+                <p>{{ request.description }}</p>
+                <p>Requested by <strong>{{ request.requestedBy }}</strong></p>
+                <p>Minimum age: {{ request.minimumAge }}</p>
+                <div class="button-row">
+                  <button (click)="reviewGroupRequest(request.id, 'approve')">Approve</button>
+                  <button class="danger-button" (click)="reviewGroupRequest(request.id, 'reject')">
+                    Reject
+                  </button>
+                </div>
+              </article>
+            } @empty {
+              <div class="empty-card">No pending group requests.</div>
+            }
+          </div>
+        </section>
+      } @else {
+        <section class="stats-grid">
+          <div class="stat-card">
+            <span>Joined groups</span>
+            <strong>{{ getJoinedGroups().length }}</strong>
+          </div>
+          <div class="stat-card">
+            <span>Available groups</span>
+            <strong>{{ groups().length }}</strong>
+          </div>
+          <div class="stat-card stat-highlight">
+            <span>Start chatting</span>
+            <strong># general</strong>
+          </div>
+        </section>
 
-    <h2>Groups</h2>
-
-    @for (group of groups(); track $index) {
-
-      <div class="group-card">
-
-        <h3>{{ group.title }}</h3>
-
-        <p>{{ group.description }}</p>
-        <p>
-          Minimum Age: {{ group.minimumAge }}
-        </p>
-        <p>
-          Group Admins: {{ group.admins.join(', ') }}
-        </p>
-
-        @if (currentuser.role !== 'superAdmin') {
-
-          @if (group.members.includes(currentuser.username)) {
-
-            <p>Member</p>
-
-          } @else if (group.joinRequests.includes(currentuser.username)) {
-
-            <p>Join request pending</p>
-
-          } @else {
-
-            <button (click)="requestJoin(group)">
-              Request to Join
-            </button>
-
-          }
-        }
-
-        @if (
-          isGroupAdmin(group)
-        ) {
-
-          <h4>Join Requests</h4>
-
-          @for (username of group.joinRequests; track $index) {
-            <p>
-              {{ username }}
-
-              <button (click)="approveJoin(group, username)">
-                Approve
-              </button>
-            </p>
-
-          } @empty {
-            <p>No pending join requests.</p>
-          }
-        }
-
-        @if (
-          currentuser.role !== 'superAdmin' &&
-          group.members.includes(currentuser.username)
-        ) {
-
-          <h4>Rooms</h4>
-
-          @for (channel of getChannelsForGroup(group.title); track $index) {
-
-            <div class="channel-card">
-              <strong>{{ channel.name }}</strong>
-              <button type="button" (click)="openChannel(group.title, channel.name)">
-                Open
-              </button>
+        <section class="content-section" id="discover-groups">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Communities</p>
+              <h2>Discover groups</h2>
             </div>
+            <input
+              class="search-input"
+              type="search"
+              placeholder="Search groups"
+              aria-label="Search groups"
+              [(ngModel)]="groupSearch" />
+          </div>
 
-          } @empty {
+          <div class="card-grid">
+            @for (group of getFilteredGroups(); track group.title) {
+              <article class="group-card">
+                <div class="group-card-heading">
+                  <div class="group-icon">{{ group.title[0].toUpperCase() }}</div>
+                  <div>
+                    <h3>{{ group.title }}</h3>
+                    <span>{{ group.members.length }} members</span>
+                  </div>
+                </div>
 
-            <p>No rooms available.</p>
+                <p>{{ group.description }}</p>
+                <div class="group-meta">
+                  <span>Age {{ group.minimumAge }}+</span>
+                  @if (group.admins.length) {
+                    <span>Admin: {{ group.admins.join(', ') }}</span>
+                  } @else {
+                    <span>Fabulari community</span>
+                  }
+                </div>
 
+                @if (group.members.includes(currentuser.username)) {
+                  <span class="joined-badge">Joined</span>
+                } @else if (group.joinRequests.includes(currentuser.username)) {
+                  <span class="pending-badge">Request pending</span>
+                } @else {
+                  <button (click)="requestJoin(group)">Request to join</button>
+                }
+
+                @if (isGroupAdmin(group)) {
+                  <details>
+                    <summary>Join requests ({{ group.joinRequests.length }})</summary>
+                    @for (username of group.joinRequests; track username) {
+                      <div class="request-line">
+                        <span>{{ username }}</span>
+                        <button (click)="approveJoin(group, username)">Approve</button>
+                      </div>
+                    } @empty {
+                      <p>No pending join requests.</p>
+                    }
+                  </details>
+                }
+              </article>
+            } @empty {
+              <div class="empty-card">No groups match your search.</div>
+            }
+          </div>
+        </section>
+
+        <section class="content-section actions-section" id="request-group">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Manage</p>
+              <h2>Requests and channels</h2>
+            </div>
+          </div>
+
+          <details>
+            <summary>Request a new group</summary>
+            <div class="form-grid">
+              <label for="groupTitle">Group title</label>
+              <input id="groupTitle" type="text" [(ngModel)]="groupTitle" maxlength="30" />
+
+              <label for="groupDescription">Description</label>
+              <textarea id="groupDescription" [(ngModel)]="groupDescription" maxlength="250"></textarea>
+
+              <label for="groupMinimumAge">Minimum age</label>
+              <input id="groupMinimumAge" type="number" min="0" [(ngModel)]="minimumAge" />
+            </div>
+            <button (click)="requestGroup()">Send request</button>
+          </details>
+
+          @if (isMemberOnlyOfAnyGroup()) {
+            <details>
+              <summary>Request a channel</summary>
+              <div class="form-grid">
+                <label for="channelGroup">Group</label>
+                <select id="channelGroup" [(ngModel)]="selectedGroupTitle">
+                  <option value="">Select group</option>
+                  @for (group of groups(); track group.title) {
+                    @if (isMemberOnly(group)) {
+                      <option [value]="group.title">{{ group.title }}</option>
+                    }
+                  }
+                </select>
+
+                <label for="channelName">Channel name</label>
+                <input id="channelName" type="text" [(ngModel)]="channelName" />
+              </div>
+              <button (click)="requestChannel()">Send channel request</button>
+            </details>
           }
 
-        }
+          @if (isGroupAdminOfAnyGroup()) {
+            <details>
+              <summary>Create a channel</summary>
+              <div class="form-grid">
+                <label for="adminChannelGroup">Group</label>
+                <select id="adminChannelGroup" [(ngModel)]="selectedAdminGroupTitle">
+                  <option value="">Select group</option>
+                  @for (group of groups(); track group.title) {
+                    @if (isGroupAdmin(group)) {
+                      <option [value]="group.title">{{ group.title }}</option>
+                    }
+                  }
+                </select>
 
-      </div>
+                <label for="adminChannelName">Channel name</label>
+                <input id="adminChannelName" type="text" [(ngModel)]="adminChannelName" />
+              </div>
+              <button (click)="createChannel()">Create channel</button>
+            </details>
 
-    } @empty {
-      <p>No groups available.</p>
-    }
-  }
-
-</div>
+            <details>
+              <summary>Pending channel requests ({{ channelRequests().length }})</summary>
+              @for (request of channelRequests(); track request.id) {
+                <div class="request-line">
+                  <span># {{ request.name }} in {{ request.groupTitle }} from {{ request.requestedBy }}</span>
+                  <div class="button-row">
+                    <button (click)="reviewChannelRequest(request.id, 'approve')">Approve</button>
+                    <button class="danger-button" (click)="reviewChannelRequest(request.id, 'reject')">
+                      Reject
+                    </button>
+                  </div>
+                </div>
+              } @empty {
+                <p>No pending channel requests.</p>
+              }
+            </details>
+          }
+        </section>
+      }
+    </main>
+  </div>
+}

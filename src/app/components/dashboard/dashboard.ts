@@ -46,6 +46,7 @@ export class Dashboard implements OnInit {
   selectedGroupTitle: string = '';
   adminChannelName: string = '';
   selectedAdminGroupTitle: string = '';
+  groupSearch: string = '';
 
   private groupService = inject(Group);
 
@@ -229,6 +230,29 @@ export class Dashboard implements OnInit {
     return groupChannels;
 
     
+  }
+
+  getJoinedGroups() {
+    return this.groups().filter(group =>
+      group.members.includes(this.currentuser.username)
+    );
+  }
+
+  getFilteredGroups() {
+    const search = this.groupSearch.trim().toLowerCase();
+
+    return this.groups().filter(group =>
+      group.title.toLowerCase().includes(search) ||
+      group.description.toLowerCase().includes(search)
+    );
+  }
+
+  getInitials() {
+    return `${this.currentuser.firstName[0]}${this.currentuser.lastName[0]}`.toUpperCase();
+  }
+
+  getRoleName() {
+    return this.currentuser.role === 'superAdmin' ? 'Super Admin' : 'Member';
   }
 
   openChannel(groupTitle: string, channelName: string) {

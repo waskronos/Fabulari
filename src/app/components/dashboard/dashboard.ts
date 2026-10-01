@@ -1,7 +1,7 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
 import { Router, RouterLink } from '@angular/router';
-import {FormsModule} from '@angular/forms';
+import { FormsModule } from '@angular/forms';
 import { Group } from '../../services/group';
 import { User } from '../../services/user';
 import {
@@ -46,7 +46,9 @@ export class Dashboard implements OnInit {
       this.profileDateOfBirth = this.currentuser.dateOfBirth || '';
       this.loadGroups(); 
       this.loadChannels();
-      this.loadGroupRequests();
+      if (!this.isHome) {
+        this.loadGroupRequests();
+      }
     } else {
       this.router.navigate(['/login']);
     }
@@ -138,7 +140,7 @@ export class Dashboard implements OnInit {
     this.groupService.getGroup().subscribe({
       next: (response) => {
         this.groups.set(response);
-        if (this.isGroupAdminOfAnyGroup()) {
+        if (!this.isHome && this.isGroupAdminOfAnyGroup()) {
           this.loadChannelRequests();
         }
       },
@@ -254,18 +256,7 @@ export class Dashboard implements OnInit {
   }
 
   getChannelsForGroup(groupTitle: string) {
-    const groupChannels = [];
-    const allChannels = this.channels();
-
-    for(let i = 0; i < allChannels.length; i++){
-      if(allChannels[i].groupTitle === groupTitle){
-        groupChannels.push(allChannels[i]);
-      }
-    }
-
-    return groupChannels;
-
-    
+    return this.channels().filter(channel => channel.groupTitle === groupTitle);
   }
 
   getJoinedGroups() {
@@ -315,15 +306,7 @@ export class Dashboard implements OnInit {
   }
 
   isGroupAdminOfAnyGroup() {
-    const allGroups = this.groups();
-
-    for (let i = 0; i < allGroups.length; i++) {
-      if (this.isGroupAdmin(allGroups[i])) {
-        return true;
-      }
-    }
-
-    return false;
+    return this.getAdminGroups().length > 0;
   }
 
   isMemberOnly(group: any) {
@@ -331,15 +314,7 @@ export class Dashboard implements OnInit {
   }
 
   isMemberOnlyOfAnyGroup() {
-    const allGroups = this.groups();
-
-    for (let i = 0; i < allGroups.length; i++) {
-      if (this.isMemberOnly(allGroups[i])) {
-        return true;
-      }
-    }
-
-    return false;
+    return this.getMemberGroups().length > 0;
   }
 
   logout() {

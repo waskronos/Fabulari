@@ -57,44 +57,51 @@
           <p>Find a group, meet your community and start chatting.</p>
         </header>
       } @else {
-      <section class="profile-card">
-        <div>
-          <p class="eyebrow">{{ currentuser.role === 'superAdmin' ? 'Administration' : 'Your account' }}</p>
-          <h1>{{ currentuser.role === 'superAdmin' ? 'Super Admin dashboard' : 'Profile dashboard' }}</h1>
-          <p>Update your profile and manage your groups and requests.</p>
-        </div>
-
-        <div class="profile-details">
-          <div class="avatar avatar-large">{{ getInitials() }}</div>
+        <section class="profile-card">
           <div>
-            <strong>{{ currentuser.firstName }} {{ currentuser.lastName }}</strong>
-            <span>&#64;{{ currentuser.username }}</span>
-            @if (currentuser.role === 'superAdmin') {
-              <span class="role-badge">Super Admin</span>
-            }
+            <p class="eyebrow">{{ currentuser.role === 'superAdmin' ? 'Administration' : 'Your account' }}</p>
+            <h1>{{ currentuser.role === 'superAdmin' ? 'Super Admin dashboard' : 'Profile dashboard' }}</h1>
+            <p>Update your profile and manage your groups and requests.</p>
           </div>
-          <button class="secondary-button" (click)="logout()">Logout</button>
-        </div>
-      </section>
-      <section class="content-section">
-        <h2>Edit profile</h2>
-        <p>Your username stays the same so your groups and messages remain linked to your account.</p>
-        <form (ngSubmit)="saveProfile()">
-          <div class="form-grid">
-            <label for="profileFirstName">First name</label>
-            <input id="profileFirstName" name="firstName" [(ngModel)]="profileFirstName" required maxlength="80" />
-            <label for="profileLastName">Last name</label>
-            <input id="profileLastName" name="lastName" [(ngModel)]="profileLastName" required maxlength="80" />
-            <label for="profileEmail">Email</label>
-            <input id="profileEmail" name="email" type="email" [(ngModel)]="profileEmail" required />
-            <label for="profileDateOfBirth">Date of birth</label>
-            <input id="profileDateOfBirth" name="dateOfBirth" type="date" [(ngModel)]="profileDateOfBirth" required />
-            <label for="currentPassword">Current password</label>
-            <input id="currentPassword" name="currentPassword" type="password" autocomplete="current-password" [(ngModel)]="currentPassword" required />
+
+          <div class="profile-details">
+            <div class="avatar avatar-large">{{ getInitials() }}</div>
+            <div>
+              <strong>{{ currentuser.firstName }} {{ currentuser.lastName }}</strong>
+              <span>&#64;{{ currentuser.username }}</span>
+              @if (currentuser.role === 'superAdmin') {
+                <span class="role-badge">Super Admin</span>
+              }
+            </div>
+            <button class="secondary-button" (click)="logout()">Logout</button>
           </div>
-          <button type="submit">Save profile</button>
-        </form>
-      </section>
+        </section>
+        <section class="content-section">
+          <h2>Edit profile</h2>
+          <p>Your username stays the same so your groups and messages remain linked to your account.</p>
+          <form (ngSubmit)="saveProfile()">
+            <div class="form-grid">
+              <label for="profileFirstName">First name</label>
+              <input id="profileFirstName" name="firstName" [(ngModel)]="profileFirstName" required maxlength="80" />
+              <label for="profileLastName">Last name</label>
+              <input id="profileLastName" name="lastName" [(ngModel)]="profileLastName" required maxlength="80" />
+              <label for="profileEmail">Email</label>
+              <input id="profileEmail" name="email" type="email" [(ngModel)]="profileEmail" required />
+              <label for="profileDateOfBirth">Date of birth</label>
+              <input id="profileDateOfBirth" name="dateOfBirth" type="date" [(ngModel)]="profileDateOfBirth" required />
+              <label for="currentPassword">Current password</label>
+              <input
+                id="currentPassword"
+                name="currentPassword"
+                type="password"
+                autocomplete="current-password"
+                [(ngModel)]="currentPassword"
+                required
+              />
+            </div>
+            <button type="submit">Save profile</button>
+          </form>
+        </section>
       }
 
       @if (currentuser.role === 'superAdmin') {
@@ -112,13 +119,13 @@
               <article class="request-card">
                 <h3>{{ request.title }}</h3>
                 <p>{{ request.description }}</p>
-                <p>Requested by <strong>{{ request.requestedBy }}</strong></p>
+                <p>
+                  Requested by <strong>{{ request.requestedBy }}</strong>
+                </p>
                 <p>Minimum age: {{ request.minimumAge }}</p>
                 <div class="button-row">
                   <button (click)="reviewGroupRequest(request.id, 'approve')">Approve</button>
-                  <button class="danger-button" (click)="reviewGroupRequest(request.id, 'reject')">
-                    Reject
-                  </button>
+                  <button class="danger-button" (click)="reviewGroupRequest(request.id, 'reject')">Reject</button>
                 </div>
               </article>
             } @empty {
@@ -128,245 +135,243 @@
         </section>
       } @else {
         @if (isHome) {
-        <section class="stats-grid">
-          <div class="stat-card">
-            <span>Joined groups</span>
-            <strong>{{ getJoinedGroups().length }}</strong>
-          </div>
-          <div class="stat-card">
-            <span>Available groups</span>
-            <strong>{{ groups().length }}</strong>
-          </div>
-          <div class="stat-card stat-highlight">
-            <span>Start chatting</span>
-            <button class="general-chat-button" type="button" (click)="openGeneralChat()">
-              Open #general
-            </button>
-          </div>
-        </section>
-
-        <section class="content-section">
-          <div class="section-heading">
-            <div>
-              <p class="eyebrow">Your communities</p>
-              <h2>Your groups</h2>
+          <section class="stats-grid">
+            <div class="stat-card">
+              <span>Joined groups</span>
+              <strong>{{ getJoinedGroups().length }}</strong>
             </div>
-          </div>
-          <div class="card-grid">
-            @for (group of getJoinedGroups(); track group.title) {
-              <article class="group-card">
-                <h3>{{ group.title }}</h3>
-                <span [class.admin-badge]="isGroupAdmin(group)" [class.joined-badge]="!isGroupAdmin(group)">
-                  {{ isGroupAdmin(group) ? 'Admin' : 'Member' }}
-                </span>
-                <p>{{ group.description }}</p>
-                <div class="button-row channel-buttons">
-                  @for (channel of getChannelsForGroup(group.title); track channel.name) {
-                    <button type="button" (click)="openChannel(group.title, channel.name)"># {{ channel.name }}</button>
-                  } @empty {
-                    <p>No channels yet.</p>
-                  }
-                </div>
-              </article>
-            } @empty {
-              <div class="empty-card">You have not joined any groups yet.</div>
-            }
-          </div>
-        </section>
-
-        <section class="content-section" id="discover-groups">
-          <div class="section-heading">
-            <div>
-              <p class="eyebrow">Communities</p>
-              <h2>Discover groups</h2>
+            <div class="stat-card">
+              <span>Available groups</span>
+              <strong>{{ groups().length }}</strong>
             </div>
-            <input
-              class="search-input"
-              type="search"
-              placeholder="Search groups"
-              aria-label="Search groups"
-              [(ngModel)]="groupSearch" />
-          </div>
-
-          <div class="card-grid">
-            @for (group of getFilteredGroups(); track group.title) {
-              <article class="group-card">
-                <div class="group-card-heading">
-                  <div class="group-icon">{{ group.title[0].toUpperCase() }}</div>
-                  <div>
-                    <h3>{{ group.title }}</h3>
-                    <span>{{ group.members.length }} members</span>
-                  </div>
-                </div>
-
-                <p>{{ group.description }}</p>
-                <div class="group-meta">
-                  <span>Age {{ group.minimumAge }}+</span>
-                  @if (group.admins.length) {
-                    <span>Admin: {{ group.admins.join(', ') }}</span>
-                  } @else {
-                    <span>Fabulari community</span>
-                  }
-                </div>
-
-                @if (group.members.includes(currentuser.username)) {
-                  <span class="joined-badge">Joined</span>
-                } @else if (group.joinRequests.includes(currentuser.username)) {
-                  <span class="pending-badge">Request pending</span>
-                } @else {
-                  <button (click)="requestJoin(group)">Request to join</button>
-                }
-
-              </article>
-            } @empty {
-              <div class="empty-card">No groups match your search.</div>
-            }
-          </div>
-        </section>
-        } @else {
-        @if (isGroupAdminOfAnyGroup()) {
-        <section class="content-section">
-          <p class="eyebrow">Administration</p>
-          <h2>Groups you administer</h2>
-          <div class="card-grid">
-            @for (group of getAdminGroups(); track group.title) {
-              <article class="group-card">
-                <h3>{{ group.title }}</h3>
-                <span class="admin-badge">Admin</span>
-                <p>{{ group.description }}</p>
-                <details>
-                  <summary>Join requests ({{ group.joinRequests.length }})</summary>
-                  @for (username of group.joinRequests; track username) {
-                    <div class="request-line">
-                      <span>{{ username }}</span>
-                      <button (click)="approveJoin(group, username)">Approve</button>
-                    </div>
-                  } @empty {
-                    <p>No pending join requests.</p>
-                  }
-                </details>
-              </article>
-            }
-          </div>
-        </section>
-        }
-        <section class="content-section">
-          <div class="section-heading">
-            <div>
-              <p class="eyebrow">Memberships</p>
-              <h2>Groups you belong to</h2>
+            <div class="stat-card stat-highlight">
+              <span>Start chatting</span>
+              <button class="general-chat-button" type="button" (click)="openGeneralChat()">Open #general</button>
             </div>
-          </div>
-          <div class="card-grid">
-            @for (group of getMemberGroups(); track group.title) {
-              <article class="group-card">
-                <h3>{{ group.title }}</h3>
-                <span class="joined-badge">Member</span>
-                <p>{{ group.description }}</p>
-              </article>
-            } @empty {
-              <div class="empty-card">You have no other group memberships.</div>
-            }
-          </div>
-        </section>
+          </section>
 
-        <section class="content-section">
-          <h2>Your group requests</h2>
-          <div class="card-grid">
-            @for (request of groupRequests(); track request.id) {
-              <article class="request-card">
-                <h3>{{ request.title }}</h3>
-                <p>{{ request.description }}</p>
-                <span class="count-badge">{{ request.status }}</span>
-              </article>
-            } @empty {
-              <p>You have not requested any groups yet.</p>
-            }
-          </div>
-        </section>
-
-        <section class="content-section actions-section" id="request-group">
-          <div class="section-heading">
-            <div>
-              <p class="eyebrow">Manage</p>
-              <h2>Requests and channels</h2>
-            </div>
-          </div>
-
-          <details>
-            <summary>Request a new group</summary>
-            <div class="form-grid">
-              <label for="groupTitle">Group title</label>
-              <input id="groupTitle" type="text" [(ngModel)]="groupTitle" maxlength="30" />
-
-              <label for="groupDescription">Description</label>
-              <textarea id="groupDescription" [(ngModel)]="groupDescription" maxlength="250"></textarea>
-
-              <label for="groupMinimumAge">Minimum age</label>
-              <input id="groupMinimumAge" type="number" min="0" [(ngModel)]="minimumAge" />
-            </div>
-            <button (click)="requestGroup()">Send request</button>
-          </details>
-
-          @if (isMemberOnlyOfAnyGroup()) {
-            <details>
-              <summary>Request a channel</summary>
-              <div class="form-grid">
-                <label for="channelGroup">Group</label>
-                <select id="channelGroup" [(ngModel)]="selectedGroupTitle">
-                  <option value="">Select group</option>
-                  @for (group of groups(); track group.title) {
-                    @if (isMemberOnly(group)) {
-                      <option [value]="group.title">{{ group.title }}</option>
-                    }
-                  }
-                </select>
-
-                <label for="channelName">Channel name</label>
-                <input id="channelName" type="text" [(ngModel)]="channelName" />
+          <section class="content-section">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">Your communities</p>
+                <h2>Your groups</h2>
               </div>
-              <button (click)="requestChannel()">Send channel request</button>
-            </details>
-          }
-
-          @if (isGroupAdminOfAnyGroup()) {
-            <details>
-              <summary>Create a channel</summary>
-              <div class="form-grid">
-                <label for="adminChannelGroup">Group</label>
-                <select id="adminChannelGroup" [(ngModel)]="selectedAdminGroupTitle">
-                  <option value="">Select group</option>
-                  @for (group of groups(); track group.title) {
-                    @if (isGroupAdmin(group)) {
-                      <option [value]="group.title">{{ group.title }}</option>
+            </div>
+            <div class="card-grid">
+              @for (group of getJoinedGroups(); track group.title) {
+                <article class="group-card">
+                  <h3>{{ group.title }}</h3>
+                  <span [class.admin-badge]="isGroupAdmin(group)" [class.joined-badge]="!isGroupAdmin(group)">
+                    {{ isGroupAdmin(group) ? 'Admin' : 'Member' }}
+                  </span>
+                  <p>{{ group.description }}</p>
+                  <div class="button-row channel-buttons">
+                    @for (channel of getChannelsForGroup(group.title); track channel.name) {
+                      <button type="button" (click)="openChannel(group.title, channel.name)">
+                        # {{ channel.name }}
+                      </button>
+                    } @empty {
+                      <p>No channels yet.</p>
                     }
-                  }
-                </select>
-
-                <label for="adminChannelName">Channel name</label>
-                <input id="adminChannelName" type="text" [(ngModel)]="adminChannelName" />
-              </div>
-              <button (click)="createChannel()">Create channel</button>
-            </details>
-
-            <details>
-              <summary>Pending channel requests ({{ channelRequests().length }})</summary>
-              @for (request of channelRequests(); track request.id) {
-                <div class="request-line">
-                  <span># {{ request.name }} in {{ request.groupTitle }} from {{ request.requestedBy }}</span>
-                  <div class="button-row">
-                    <button (click)="reviewChannelRequest(request.id, 'approve')">Approve</button>
-                    <button class="danger-button" (click)="reviewChannelRequest(request.id, 'reject')">
-                      Reject
-                    </button>
                   </div>
-                </div>
+                </article>
               } @empty {
-                <p>No pending channel requests.</p>
+                <div class="empty-card">You have not joined any groups yet.</div>
               }
-            </details>
+            </div>
+          </section>
+
+          <section class="content-section" id="discover-groups">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">Communities</p>
+                <h2>Discover groups</h2>
+              </div>
+              <input
+                class="search-input"
+                type="search"
+                placeholder="Search groups"
+                aria-label="Search groups"
+                [(ngModel)]="groupSearch"
+              />
+            </div>
+
+            <div class="card-grid">
+              @for (group of getFilteredGroups(); track group.title) {
+                <article class="group-card">
+                  <div class="group-card-heading">
+                    <div class="group-icon">{{ group.title[0].toUpperCase() }}</div>
+                    <div>
+                      <h3>{{ group.title }}</h3>
+                      <span>{{ group.members.length }} members</span>
+                    </div>
+                  </div>
+
+                  <p>{{ group.description }}</p>
+                  <div class="group-meta">
+                    <span>Age {{ group.minimumAge }}+</span>
+                    @if (group.admins.length) {
+                      <span>Admin: {{ group.admins.join(', ') }}</span>
+                    } @else {
+                      <span>Fabulari community</span>
+                    }
+                  </div>
+
+                  @if (group.members.includes(currentuser.username)) {
+                    <span class="joined-badge">Joined</span>
+                  } @else if (group.joinRequests.includes(currentuser.username)) {
+                    <span class="pending-badge">Request pending</span>
+                  } @else {
+                    <button (click)="requestJoin(group)">Request to join</button>
+                  }
+                </article>
+              } @empty {
+                <div class="empty-card">No groups match your search.</div>
+              }
+            </div>
+          </section>
+        } @else {
+          @if (isGroupAdminOfAnyGroup()) {
+            <section class="content-section">
+              <p class="eyebrow">Administration</p>
+              <h2>Groups you administer</h2>
+              <div class="card-grid">
+                @for (group of getAdminGroups(); track group.title) {
+                  <article class="group-card">
+                    <h3>{{ group.title }}</h3>
+                    <span class="admin-badge">Admin</span>
+                    <p>{{ group.description }}</p>
+                    <details>
+                      <summary>Join requests ({{ group.joinRequests.length }})</summary>
+                      @for (username of group.joinRequests; track username) {
+                        <div class="request-line">
+                          <span>{{ username }}</span>
+                          <button (click)="approveJoin(group, username)">Approve</button>
+                        </div>
+                      } @empty {
+                        <p>No pending join requests.</p>
+                      }
+                    </details>
+                  </article>
+                }
+              </div>
+            </section>
           }
-        </section>
+          <section class="content-section">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">Memberships</p>
+                <h2>Groups you belong to</h2>
+              </div>
+            </div>
+            <div class="card-grid">
+              @for (group of getMemberGroups(); track group.title) {
+                <article class="group-card">
+                  <h3>{{ group.title }}</h3>
+                  <span class="joined-badge">Member</span>
+                  <p>{{ group.description }}</p>
+                </article>
+              } @empty {
+                <div class="empty-card">You have no other group memberships.</div>
+              }
+            </div>
+          </section>
+
+          <section class="content-section">
+            <h2>Your group requests</h2>
+            <div class="card-grid">
+              @for (request of groupRequests(); track request.id) {
+                <article class="request-card">
+                  <h3>{{ request.title }}</h3>
+                  <p>{{ request.description }}</p>
+                  <span class="count-badge">{{ request.status }}</span>
+                </article>
+              } @empty {
+                <p>You have not requested any groups yet.</p>
+              }
+            </div>
+          </section>
+
+          <section class="content-section actions-section" id="request-group">
+            <div class="section-heading">
+              <div>
+                <p class="eyebrow">Manage</p>
+                <h2>Requests and channels</h2>
+              </div>
+            </div>
+
+            <details>
+              <summary>Request a new group</summary>
+              <div class="form-grid">
+                <label for="groupTitle">Group title</label>
+                <input id="groupTitle" type="text" [(ngModel)]="groupTitle" maxlength="30" />
+
+                <label for="groupDescription">Description</label>
+                <textarea id="groupDescription" [(ngModel)]="groupDescription" maxlength="250"></textarea>
+
+                <label for="groupMinimumAge">Minimum age</label>
+                <input id="groupMinimumAge" type="number" min="0" [(ngModel)]="minimumAge" />
+              </div>
+              <button (click)="requestGroup()">Send request</button>
+            </details>
+
+            @if (isMemberOnlyOfAnyGroup()) {
+              <details>
+                <summary>Request a channel</summary>
+                <div class="form-grid">
+                  <label for="channelGroup">Group</label>
+                  <select id="channelGroup" [(ngModel)]="selectedGroupTitle">
+                    <option value="">Select group</option>
+                    @for (group of groups(); track group.title) {
+                      @if (isMemberOnly(group)) {
+                        <option [value]="group.title">{{ group.title }}</option>
+                      }
+                    }
+                  </select>
+
+                  <label for="channelName">Channel name</label>
+                  <input id="channelName" type="text" [(ngModel)]="channelName" />
+                </div>
+                <button (click)="requestChannel()">Send channel request</button>
+              </details>
+            }
+
+            @if (isGroupAdminOfAnyGroup()) {
+              <details>
+                <summary>Create a channel</summary>
+                <div class="form-grid">
+                  <label for="adminChannelGroup">Group</label>
+                  <select id="adminChannelGroup" [(ngModel)]="selectedAdminGroupTitle">
+                    <option value="">Select group</option>
+                    @for (group of groups(); track group.title) {
+                      @if (isGroupAdmin(group)) {
+                        <option [value]="group.title">{{ group.title }}</option>
+                      }
+                    }
+                  </select>
+
+                  <label for="adminChannelName">Channel name</label>
+                  <input id="adminChannelName" type="text" [(ngModel)]="adminChannelName" />
+                </div>
+                <button (click)="createChannel()">Create channel</button>
+              </details>
+
+              <details>
+                <summary>Pending channel requests ({{ channelRequests().length }})</summary>
+                @for (request of channelRequests(); track request.id) {
+                  <div class="request-line">
+                    <span># {{ request.name }} in {{ request.groupTitle }} from {{ request.requestedBy }}</span>
+                    <div class="button-row">
+                      <button (click)="reviewChannelRequest(request.id, 'approve')">Approve</button>
+                      <button class="danger-button" (click)="reviewChannelRequest(request.id, 'reject')">Reject</button>
+                    </div>
+                  </div>
+                } @empty {
+                  <p>No pending channel requests.</p>
+                }
+              </details>
+            }
+          </section>
         }
       }
     </main>

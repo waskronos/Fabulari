@@ -46,6 +46,40 @@ export async function seedDatabase() {
   }
 }
 
+export async function ensureGeneralChat() {
+  const users = await getDB().collection('users')
+    .find({ role: { $ne: 'superAdmin' } })
+    .toArray();
+  const members = users.map(user => user.username);
+
+  await getDB().collection('groups').updateOne(
+    { title: 'Fabulari' },
+    {
+      $setOnInsert: {
+        title: 'Fabulari',
+        description: 'The main community for everyone on Fabulari.',
+        minimumAge: 0,
+        admins: [],
+        joinRequests: [],
+      },
+      $set: { members },
+    },
+    { upsert: true }
+  );
+
+  await getDB().collection('channels').updateOne(
+    { groupTitle: 'Fabulari', name: 'general' },
+    {
+      $setOnInsert: {
+        groupTitle: 'Fabulari',
+        name: 'general',
+        createdBy: 'Fabulari',
+      },
+    },
+    { upsert: true }
+  );
+}
+
 /** Closes the shared MongoDB connection during shutdown or tests. */
 export async function closeDB() {
   await client.close();

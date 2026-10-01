@@ -5,7 +5,13 @@ import bcrypt from 'bcryptjs';
 import 'dotenv/config';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
-import { checkDatabaseHealth, connectDB, getDB, seedDatabase } from './db.js';
+import {
+    checkDatabaseHealth,
+    connectDB,
+    ensureGeneralChat,
+    getDB,
+    seedDatabase,
+} from './db.js';
 import connectSockets from './sockets.js';
 
 const app = express();
@@ -104,6 +110,12 @@ app.post('/api/users', async (req, res) => {
              newUser.password = hashedPassword;
              
              await getDB().collection('users').insertOne(newUser);
+             if (newUser.role !== 'superAdmin') {
+                await getDB().collection('groups').updateOne(
+                    { title: 'Fabulari' },
+                    { $addToSet: { members: newUser.username } }
+                );
+             }
              return res.json({message: 'User added successfully'});
     } catch (error) {
         console.error('Error creating user:', error);
@@ -649,6 +661,7 @@ async function startServer() {
         await connectDB();
         await checkDatabaseHealth();
         await seedDatabase();
+        await ensureGeneralChat();
 
         httpServer.listen(port, () => {
             console.log(`Server running on port ${port}`);

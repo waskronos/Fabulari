@@ -1,10 +1,13 @@
 <nav>
-  <a class="brand" routerLink="/">Fabulari</a>
+  <a class="brand" [routerLink]="isLoggedIn() ? '/home' : '/'">Fabulari</a>
 
-  <a routerLink="/">Home</a>
-  <a routerLink="/login">Login</a>
-  <a routerLink="/register">Register</a>
-  <a routerLink="/dashboard">Dashboard</a>
+  <a [routerLink]="isLoggedIn() ? '/home' : '/'">Home</a>
+  @if (isLoggedIn()) {
+    <a routerLink="/dashboard">Dashboard</a>
+  } @else {
+    <a routerLink="/login">Login</a>
+    <a routerLink="/register">Register</a>
+  }
 </nav>
 
 <router-outlet></router-outlet>

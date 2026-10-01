@@ -12,6 +12,14 @@ export interface LoginRequest {
   password: string;
 }
 
+export interface ProfileRequest {
+  firstName: string;
+  lastName: string;
+  email: string;
+  dateOfBirth: string;
+  currentPassword: string;
+}
+
 export interface CurrentUser {
   username: string;
   firstName: string;

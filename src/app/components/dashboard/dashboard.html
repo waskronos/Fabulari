@@ -9,7 +9,8 @@
         </div>
       </div>
 
-      <a class="sidebar-link" href="#home">Home</a>
+      <a class="sidebar-link" routerLink="/home" [class.active-link]="isHome">Home</a>
+      <a class="sidebar-link" routerLink="/dashboard" [class.active-link]="!isHome">Profile dashboard</a>
 
       @if (currentuser.role !== 'superAdmin') {
         <div class="sidebar-heading">
@@ -35,10 +36,10 @@
           }
         </div>
 
-        <a class="sidebar-link" href="#discover-groups">Discover groups</a>
-        <a class="sidebar-link" href="#request-group">Request a group</a>
+        <a class="sidebar-link" routerLink="/home" fragment="discover-groups">Discover groups</a>
+        <a class="sidebar-link" routerLink="/dashboard" fragment="request-group">Request a group</a>
       } @else {
-        <a class="sidebar-link" href="#admin-workspace">Admin workspace</a>
+        <a class="sidebar-link" routerLink="/dashboard" fragment="admin-workspace">Admin workspace</a>
       }
     </aside>
 
@@ -49,11 +50,18 @@
         </div>
       }
 
+      @if (isHome) {
+        <header class="home-heading">
+          <p class="eyebrow">Your communities</p>
+          <h1>Fabulari</h1>
+          <p>Find a group, meet your community and start chatting.</p>
+        </header>
+      } @else {
       <section class="profile-card">
         <div>
-          <p class="eyebrow">Your dashboard</p>
-          <h1>Welcome back, {{ currentuser.firstName }}</h1>
-          <p>Find your groups, open a channel and continue the conversation.</p>
+          <p class="eyebrow">{{ currentuser.role === 'superAdmin' ? 'Administration' : 'Your account' }}</p>
+          <h1>{{ currentuser.role === 'superAdmin' ? 'Super Admin dashboard' : 'Profile dashboard' }}</h1>
+          <p>Update your profile and manage your groups and requests.</p>
         </div>
 
         <div class="profile-details">
@@ -61,11 +69,33 @@
           <div>
             <strong>{{ currentuser.firstName }} {{ currentuser.lastName }}</strong>
             <span>&#64;{{ currentuser.username }}</span>
-            <span class="role-badge">{{ getRoleName() }}</span>
+            @if (currentuser.role === 'superAdmin') {
+              <span class="role-badge">Super Admin</span>
+            }
           </div>
           <button class="secondary-button" (click)="logout()">Logout</button>
         </div>
       </section>
+      <section class="content-section">
+        <h2>Edit profile</h2>
+        <p>Your username stays the same so your groups and messages remain linked to your account.</p>
+        <form (ngSubmit)="saveProfile()">
+          <div class="form-grid">
+            <label for="profileFirstName">First name</label>
+            <input id="profileFirstName" name="firstName" [(ngModel)]="profileFirstName" required maxlength="80" />
+            <label for="profileLastName">Last name</label>
+            <input id="profileLastName" name="lastName" [(ngModel)]="profileLastName" required maxlength="80" />
+            <label for="profileEmail">Email</label>
+            <input id="profileEmail" name="email" type="email" [(ngModel)]="profileEmail" required />
+            <label for="profileDateOfBirth">Date of birth</label>
+            <input id="profileDateOfBirth" name="dateOfBirth" type="date" [(ngModel)]="profileDateOfBirth" required />
+            <label for="currentPassword">Current password</label>
+            <input id="currentPassword" name="currentPassword" type="password" autocomplete="current-password" [(ngModel)]="currentPassword" required />
+          </div>
+          <button type="submit">Save profile</button>
+        </form>
+      </section>
+      }
 
       @if (currentuser.role === 'superAdmin') {
         <section class="content-section" id="admin-workspace">
@@ -97,6 +127,7 @@
           </div>
         </section>
       } @else {
+        @if (isHome) {
         <section class="stats-grid">
           <div class="stat-card">
             <span>Joined groups</span>
@@ -111,6 +142,35 @@
             <button class="general-chat-button" type="button" (click)="openGeneralChat()">
               Open #general
             </button>
+          </div>
+        </section>
+
+        <section class="content-section">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Your communities</p>
+              <h2>Your groups</h2>
+            </div>
+          </div>
+          <div class="card-grid">
+            @for (group of getJoinedGroups(); track group.title) {
+              <article class="group-card">
+                <h3>{{ group.title }}</h3>
+                <span [class.admin-badge]="isGroupAdmin(group)" [class.joined-badge]="!isGroupAdmin(group)">
+                  {{ isGroupAdmin(group) ? 'Admin' : 'Member' }}
+                </span>
+                <p>{{ group.description }}</p>
+                <div class="button-row channel-buttons">
+                  @for (channel of getChannelsForGroup(group.title); track channel.name) {
+                    <button type="button" (click)="openChannel(group.title, channel.name)"># {{ channel.name }}</button>
+                  } @empty {
+                    <p>No channels yet.</p>
+                  }
+                </div>
+              </article>
+            } @empty {
+              <div class="empty-card">You have not joined any groups yet.</div>
+            }
           </div>
         </section>
 
@@ -157,22 +217,70 @@
                   <button (click)="requestJoin(group)">Request to join</button>
                 }
 
-                @if (isGroupAdmin(group)) {
-                  <details>
-                    <summary>Join requests ({{ group.joinRequests.length }})</summary>
-                    @for (username of group.joinRequests; track username) {
-                      <div class="request-line">
-                        <span>{{ username }}</span>
-                        <button (click)="approveJoin(group, username)">Approve</button>
-                      </div>
-                    } @empty {
-                      <p>No pending join requests.</p>
-                    }
-                  </details>
-                }
               </article>
             } @empty {
               <div class="empty-card">No groups match your search.</div>
+            }
+          </div>
+        </section>
+        } @else {
+        @if (isGroupAdminOfAnyGroup()) {
+        <section class="content-section">
+          <p class="eyebrow">Administration</p>
+          <h2>Groups you administer</h2>
+          <div class="card-grid">
+            @for (group of getAdminGroups(); track group.title) {
+              <article class="group-card">
+                <h3>{{ group.title }}</h3>
+                <span class="admin-badge">Admin</span>
+                <p>{{ group.description }}</p>
+                <details>
+                  <summary>Join requests ({{ group.joinRequests.length }})</summary>
+                  @for (username of group.joinRequests; track username) {
+                    <div class="request-line">
+                      <span>{{ username }}</span>
+                      <button (click)="approveJoin(group, username)">Approve</button>
+                    </div>
+                  } @empty {
+                    <p>No pending join requests.</p>
+                  }
+                </details>
+              </article>
+            }
+          </div>
+        </section>
+        }
+        <section class="content-section">
+          <div class="section-heading">
+            <div>
+              <p class="eyebrow">Memberships</p>
+              <h2>Groups you belong to</h2>
+            </div>
+          </div>
+          <div class="card-grid">
+            @for (group of getMemberGroups(); track group.title) {
+              <article class="group-card">
+                <h3>{{ group.title }}</h3>
+                <span class="joined-badge">Member</span>
+                <p>{{ group.description }}</p>
+              </article>
+            } @empty {
+              <div class="empty-card">You have no other group memberships.</div>
+            }
+          </div>
+        </section>
+
+        <section class="content-section">
+          <h2>Your group requests</h2>
+          <div class="card-grid">
+            @for (request of groupRequests(); track request.id) {
+              <article class="request-card">
+                <h3>{{ request.title }}</h3>
+                <p>{{ request.description }}</p>
+                <span class="count-badge">{{ request.status }}</span>
+              </article>
+            } @empty {
+              <p>You have not requested any groups yet.</p>
             }
           </div>
         </section>
@@ -259,6 +367,7 @@
             </details>
           }
         </section>
+        }
       }
     </main>
   </div>

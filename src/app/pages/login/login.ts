@@ -31,7 +31,7 @@ export class Login {
   this.userService.loginUser(loginData).subscribe({
     next: (response: LoginResponse) => {
       localStorage.setItem('currentUser', JSON.stringify(response.user));
-      this.router.navigate(['/dashboard']);
+      this.router.navigate([response.user.role === 'superAdmin' ? '/dashboard' : '/home']);
     },
     error: (error: HttpErrorResponse) => {
       this.feedbackMessage.set(error.error?.message ?? 'Login failed. Please try again.');

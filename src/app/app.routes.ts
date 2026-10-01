@@ -10,5 +10,6 @@ export const routes: Routes = [
   { path: 'login', component: Login },
   { path: 'register', component: Register },
   { path: 'dashboard', component: Dashboard },
+  { path: 'home', component: Dashboard },
   { path: 'chat/:groupTitle/:channelName', component: Chat }
 ]

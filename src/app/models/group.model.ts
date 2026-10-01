@@ -30,7 +30,7 @@ export interface PendingChannelRequest {
   groupTitle: string;
   name: string;
   requestedBy: string;
-  status: 'pending';
+  status: 'pending' | 'approved' | 'rejected';
   createdAt: string;
 }
 

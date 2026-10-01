@@ -1,8 +1,9 @@
 import { Component, OnInit, inject, signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
-import { Router } from '@angular/router';
+import { Router, RouterLink } from '@angular/router';
 import {FormsModule} from '@angular/forms';
 import { Group } from '../../services/group';
+import { User } from '../../services/user';
 import {
   ApiMessage,
   ChannelRequestData,
@@ -13,7 +14,7 @@ import {
 } from '../../models/group.model';
 
 @Component({
-  imports: [FormsModule],
+  imports: [FormsModule, RouterLink],
   selector: 'app-dashboard',
   styleUrl: './dashboard.css',
   templateUrl: './dashboard.html',
@@ -23,16 +24,29 @@ export class Dashboard implements OnInit {
   feedbackMessage = signal('');
   feedbackType = signal<'success' | 'error'>('success');
   constructor(private router: Router) {}
+  isHome = false;
+  profileFirstName = '';
+  profileLastName = '';
+  profileEmail = '';
+  profileDateOfBirth = '';
+  currentPassword = '';
 
   ngOnInit() {
     const storedUser = localStorage.getItem('currentUser');
     if (storedUser) {
       this.currentuser = JSON.parse(storedUser);
+      this.isHome = this.router.url.split(/[?#]/)[0] === '/home';
+      if (this.isHome && this.currentuser.role === 'superAdmin') {
+        this.router.navigate(['/dashboard']);
+        return;
+      }
+      this.profileFirstName = this.currentuser.firstName;
+      this.profileLastName = this.currentuser.lastName;
+      this.profileEmail = this.currentuser.email;
+      this.profileDateOfBirth = this.currentuser.dateOfBirth || '';
       this.loadGroups(); 
       this.loadChannels();
-      if (this.currentuser.role === 'superAdmin') {
-        this.loadGroupRequests();
-      }
+      this.loadGroupRequests();
     } else {
       this.router.navigate(['/login']);
     }
@@ -49,6 +63,27 @@ export class Dashboard implements OnInit {
   groupSearch: string = '';
 
   private groupService = inject(Group);
+  private userService = inject(User);
+
+  saveProfile() {
+    this.userService.updateProfile(this.currentuser.username, {
+      firstName: this.profileFirstName,
+      lastName: this.profileLastName,
+      email: this.profileEmail,
+      dateOfBirth: this.profileDateOfBirth,
+      currentPassword: this.currentPassword,
+    }).subscribe({
+      next: (response) => {
+        this.currentuser = response.user;
+        localStorage.setItem('currentUser', JSON.stringify(response.user));
+        this.currentPassword = '';
+        this.showFeedback(response.message, 'success');
+      },
+      error: (error: HttpErrorResponse) => {
+        this.showApiError(error, 'Profile could not be saved.');
+      },
+    });
+  }
 
   requestGroup() {
     const request: GroupRequestData = {
@@ -64,6 +99,7 @@ export class Dashboard implements OnInit {
         this.groupTitle = '';
         this.groupDescription = '';
         this.minimumAge = null;
+        this.loadGroupRequests();
       },
       error: (error: HttpErrorResponse) => {
         this.showApiError(error, 'Group request could not be sent.');
@@ -238,6 +274,14 @@ export class Dashboard implements OnInit {
     );
   }
 
+  getAdminGroups() {
+    return this.groups().filter(group => this.isGroupAdmin(group));
+  }
+
+  getMemberGroups() {
+    return this.getJoinedGroups().filter(group => !this.isGroupAdmin(group));
+  }
+
   openGeneralChat() {
     const generalGroup = this.groups().find(group => group.title === 'Fabulari');
 
@@ -260,10 +304,6 @@ export class Dashboard implements OnInit {
 
   getInitials() {
     return `${this.currentuser.firstName[0]}${this.currentuser.lastName[0]}`.toUpperCase();
-  }
-
-  getRoleName() {
-    return this.currentuser.role === 'superAdmin' ? 'Super Admin' : 'Member';
   }
 
   openChannel(groupTitle: string, channelName: string) {

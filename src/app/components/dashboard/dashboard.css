@@ -92,6 +92,31 @@
   background: #252832;
 }
 
+.active-link {
+  background: #302946;
+  color: #d0c7ff;
+}
+
+.home-heading h1 {
+  margin: 0;
+  font-size: 2.6rem;
+}
+
+.channel-buttons {
+  flex-wrap: wrap;
+}
+
+.admin-badge {
+  display: inline-block;
+  margin-top: 8px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: white;
+  color: #b94f00;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
 .sidebar-heading {
   display: flex;
   justify-content: space-between;

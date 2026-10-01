@@ -171,6 +171,64 @@ app.post('/api/login', async (req, res) => {
 });
 
 
+app.patch('/api/users/:username', async (req, res) => {
+    const { firstName, lastName, email, dateOfBirth, currentPassword } = req.body;
+    if (![firstName, lastName, email, dateOfBirth, currentPassword]
+        .every(value => typeof value === 'string' && value.trim())) {
+        return res.status(400).json({message: 'All profile fields and your current password are required'});
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    if (firstName.trim().length > 80 || lastName.trim().length > 80 || cleanEmail.length > 254) {
+        return res.status(400).json({message: 'Please use shorter profile details'});
+    }
+    const birthDate = new Date(`${dateOfBirth}T00:00:00`);
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(cleanEmail)) {
+        return res.status(400).json({message: 'Invalid email format'});
+    }
+    if (Number.isNaN(birthDate.getTime()) || birthDate > new Date() ||
+        !/^\d{4}-\d{2}-\d{2}$/.test(dateOfBirth) ||
+        birthDate.getFullYear() !== Number(dateOfBirth.slice(0, 4)) ||
+        birthDate.getMonth() + 1 !== Number(dateOfBirth.slice(5, 7)) ||
+        birthDate.getDate() !== Number(dateOfBirth.slice(8, 10))) {
+        return res.status(400).json({message: 'Please enter a valid date of birth'});
+    }
+
+    try {
+        const users = getDB().collection('users');
+        const user = await users.findOne({username: req.params.username});
+        if (!user || !await bcrypt.compare(currentPassword, user.password)) {
+            return res.status(401).json({message: 'Your current password is incorrect'});
+        }
+        const duplicateEmail = await users.findOne({
+            email: cleanEmail, _id: { $ne: user._id },
+        });
+        if (duplicateEmail) {
+            return res.status(400).json({message: 'Email already exists'});
+        }
+
+        const profile = {
+            firstName: firstName.trim(),
+            lastName: lastName.trim(),
+            email: cleanEmail,
+            dateOfBirth,
+        };
+        await users.updateOne({ _id: user._id }, { $set: profile });
+        return res.json({
+            message: 'Profile updated successfully',
+            user: {
+                username: user.username,
+                ...profile,
+                age: calculateAge(dateOfBirth),
+                role: user.role,
+            },
+        });
+    } catch (error) {
+        console.error('Error updating profile:', error);
+        return res.status(500).json({message: 'Profile could not be saved'});
+    }
+});
+
 app.get('/api/groups', async (_req, res) => {
     try {
         const groups = await getDB().collection('groups').find().toArray();
@@ -262,12 +320,15 @@ app.get('/api/group-requests', async (req, res) => {
             user => user.username.toLowerCase() === username.toLowerCase()
         );
 
-        if (!currentUser || currentUser.role !== 'superAdmin') {
-            return res.status(403).json({message: 'Only the Super Admin can view group requests'});
+        if (!currentUser) {
+            return res.status(404).json({message: 'User not found'});
         }
 
         return res.status(200).json(
-            requests.filter(request => request.type === 'group' && request.status === 'pending')
+            requests.filter(request => request.type === 'group' &&
+                (currentUser.role === 'superAdmin'
+                    ? request.status === 'pending'
+                    : request.requestedBy === currentUser.username))
         );
     } catch (error) {
         console.error('Error loading group requests:', error);

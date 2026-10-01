@@ -145,6 +145,13 @@ app.post('/api/login', async (req, res) => {
             return res.status(401).json({ message: 'Invalid credentials' });
         }
 
+        if (user.role !== 'superAdmin') {
+            await getDB().collection('groups').updateOne(
+                { title: 'Fabulari' },
+                { $addToSet: { members: user.username } }
+            );
+        }
+
         return res.json({
             message: 'Login successful',
             user: {

@@ -240,6 +240,13 @@
   background: #211e35;
 }
 
+.general-chat-button {
+  padding: 0;
+  background: transparent;
+  font-size: 1.35rem;
+  text-align: left;
+}
+
 .content-section {
   margin-top: 22px;
   padding: 24px;

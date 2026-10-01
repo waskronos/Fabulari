@@ -238,6 +238,17 @@ export class Dashboard implements OnInit {
     );
   }
 
+  openGeneralChat() {
+    const generalGroup = this.groups().find(group => group.title === 'Fabulari');
+
+    if (!generalGroup?.members.includes(this.currentuser.username)) {
+      this.showFeedback('Please log out and sign in again to refresh your account.', 'error');
+      return;
+    }
+
+    this.openChannel('Fabulari', 'general');
+  }
+
   getFilteredGroups() {
     const search = this.groupSearch.trim().toLowerCase();
 

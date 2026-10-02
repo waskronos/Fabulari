@@ -94,7 +94,8 @@ export class Administration implements OnChanges {
     if (request.status !== 'pending' || ['membership', 'channel'].includes(request.type)) return false;
     if (request.type === 'deleteUser') return this.currentUser.role === 'superAdmin';
     return this.currentUser.role !== 'superAdmin' && this.groups.some(group =>
-      group._id === request.groupId && group.admins.includes(this.currentUser.username));
+      group._id === request.groupId && group.admins.includes(this.currentUser.username) &&
+      !group.admins.includes(request.targetUsername));
   }
 
   loadUsers() {
@@ -110,7 +111,6 @@ export class Administration implements OnChanges {
       .subscribe({next: logs => this.logs.set(logs), error: error => this.showError(error)});
   }
 
-  // All administrative buttons reuse the same response and refresh handling.
   runAction(request: Observable<ApiMessage>) {
     request.subscribe({
       next: response => {

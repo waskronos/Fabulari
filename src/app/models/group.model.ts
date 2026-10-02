@@ -36,9 +36,4 @@ export interface PendingChannelRequest {
 
 export type RequestDecision = 'approve' | 'reject';
 
-export interface ReviewGroupRequestData {
-  action: RequestDecision;
-  reviewedBy: string;
-}
-
 export type { ApiMessage };

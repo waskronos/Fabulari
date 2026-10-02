@@ -159,10 +159,12 @@ describe('API routes', () => {
     await api('/groups/join', 'post', {title: 'Study', username: 'bob'}, 'bob');
   });
 
-  it('promotes and demotes a group admin', async () => {
-    await api('/groups/' + study._id + '/members', 'patch', {action: 'promote', username: 'bob'});
+  it('allows only Super Admin to promote and demote a group admin', async () => {
+    await api('/groups/' + study._id + '/members', 'patch', {action: 'promote', username: 'bob'}, 'alice', 403);
+    await api('/groups/' + study._id + '/members', 'patch', {action: 'promote', username: 'bob'}, 'admin');
     expect((await db.collection('groups').findOne({_id: study._id})).admins).to.include('bob');
-    await api('/groups/' + study._id + '/members', 'patch', {action: 'demote', username: 'bob'});
+    await api('/groups/' + study._id + '/members', 'patch', {action: 'demote', username: 'bob'}, 'alice', 403);
+    await api('/groups/' + study._id + '/members', 'patch', {action: 'demote', username: 'bob'}, 'admin');
     expect((await db.collection('groups').findOne({_id: study._id})).admins).not.to.include('bob');
   });
 
@@ -217,7 +219,7 @@ describe('API routes', () => {
   });
 
   it('saves a member report for the group admin', async () => {
-    await api('/moderation-requests', 'post', {groupId: study._id.toString(), type: 'ban', targetUsername: 'alice', reason: 'Spam'}, 'bob', 201);
+    await api('/moderation-requests', 'post', {groupId: study._id.toString(), type: 'ban', targetUsername: 'bob', reason: 'Spam'}, 'alice', 201);
     expect((await api('/moderation-requests'))[0].type).to.equal('ban');
   });
 
@@ -275,5 +277,26 @@ describe('API routes', () => {
     expect(logs).to.have.length(1);
     expect(logs[0].action).to.equal('channel created');
     await api('/audit-logs', 'get', {}, 'alice', 403);
+  });
+
+  it('prevents Group Admins removing or banning another admin', async () => {
+    await api('/groups/' + study._id + '/members', 'patch', {action: 'promote', username: 'bob'}, 'admin');
+    for (const action of ['remove', 'ban']) {
+      await api('/groups/' + study._id + '/members', 'patch', {action, username: 'bob', reason: 'Spam'}, 'alice', 403);
+    }
+    await api('/groups/' + study._id + '/members', 'patch', {action: 'ban', username: 'bob', reason: 'Spam'}, 'admin');
+    expect((await db.collection('groups').findOne({_id: study._id})).bannedMembers).to.include('bob');
+  });
+
+  it('rejects a ban report against a Group Admin', async () => {
+    await api('/moderation-requests', 'post', {groupId: study._id.toString(), type: 'ban', targetUsername: 'alice', reason: 'Spam'}, 'bob', 403);
+  });
+
+  it('does not approve a ban if the reported member has since become an admin', async () => {
+    await api('/moderation-requests', 'post', {groupId: study._id.toString(), type: 'ban', targetUsername: 'bob', reason: 'Spam'}, 'alice', 201);
+    const pending = await db.collection('requests').findOne({type: 'ban'});
+    await api('/groups/' + study._id + '/members', 'patch', {action: 'promote', username: 'bob'}, 'admin');
+    await api('/moderation-requests/' + pending._id, 'patch', {action: 'approve'}, 'alice', 400);
+    expect((await db.collection('groups').findOne({_id: study._id})).admins).to.include('bob');
   });
 });

@@ -1,4 +1,3 @@
-// Accept the same small image formats for profiles and chat messages.
 export function isValidImage(value) {
     if (typeof value !== 'string') return false;
     if (!value) return true;

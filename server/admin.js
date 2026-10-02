@@ -12,7 +12,6 @@ function isLastAdmin(group, username) {
     return group.admins.includes(username) && group.admins.length === 1;
 }
 
-// Close matching live chats as soon as access is removed.
 function closeChats(io, groupTitle, username, channelName) {
     for (const socket of io.sockets.sockets.values()) {
         const channel = socket.data.channel;
@@ -35,6 +34,7 @@ async function findGroup(req, res) {
 }
 
 async function banMember(io, group, username, actor, reason) {
+    if (group.admins.includes(username) && actor.role !== 'superAdmin') return 'Only Super Admin can ban a Group Admin';
     if (isLastAdmin(group, username)) return 'Appoint another admin before banning this user';
     await getDB().collection('groups').updateOne({_id: group._id}, {
         $pull: {members: username, admins: username, joinRequests: username},
@@ -43,12 +43,11 @@ async function banMember(io, group, username, actor, reason) {
     closeChats(io, group.title, username);
     await getDB().collection('requests').updateMany({
         groupTitle: group.title, requestedBy: username, status: 'pending', type: {$in: ['membership', 'channel']},
-    }, {$set: {status: 'rejected', reviewedBy: actor, reviewReason: 'Banned from group', reviewedAt: new Date()}});
-    await recordAudit(actor, 'member banned', group.title, `${username}: ${reason}`);
+    }, {$set: {status: 'rejected', reviewedBy: actor.username, reviewReason: 'Banned from group', reviewedAt: new Date()}});
+    await recordAudit(actor.username, 'member banned', group.title, `${username}: ${reason}`);
     return null;
 }
 
-// Both direct deletion and an approved request use the same last-admin check.
 async function deleteUser(io, username, actor, reason) {
     const user = await getDB().collection('users').findOne({username});
     if (!user) return 'User not found';
@@ -162,8 +161,14 @@ export default function addAdminRoutes(app, io) {
             return res.status(400).json({message: 'Choose a valid member action'});
         }
         const leaving = action === 'leave' && username === req.user.username && req.user.role !== 'superAdmin';
-        const assigningAdmin = req.user.role === 'superAdmin' && ['promote', 'demote'].includes(action);
-        if (!leaving && !assigningAdmin && !isGroupAdmin(group, req.user)) {
+        if (['promote', 'demote'].includes(action) && req.user.role !== 'superAdmin') {
+            return res.status(403).json({message: 'Only Super Admin can assign or remove Group Admin roles'});
+        }
+        if (['remove', 'ban'].includes(action) && group.admins.includes(username) && req.user.role !== 'superAdmin') {
+            return res.status(403).json({message: 'Only Super Admin can remove or ban a Group Admin'});
+        }
+        const superAdminAction = req.user.role === 'superAdmin' && ['promote', 'demote', 'remove', 'ban'].includes(action);
+        if (!leaving && !superAdminAction && !isGroupAdmin(group, req.user)) {
             return res.status(403).json({message: 'You cannot manage this group'});
         }
         if (action === 'unban') {
@@ -176,7 +181,7 @@ export default function addAdminRoutes(app, io) {
             }
             if (action === 'ban') {
                 if (!reason.trim()) return res.status(400).json({message: 'A ban reason is required'});
-                const error = await banMember(io, group, username, req.user.username, reason.trim());
+                const error = await banMember(io, group, username, req.user, reason.trim());
                 if (error) return res.status(400).json({message: error});
                 return res.json({message: 'Member banned from this group'});
             }
@@ -254,6 +259,9 @@ export default function addAdminRoutes(app, io) {
         if (await getDB().collection('requests').findOne({type, groupId: group._id.toString(), targetUsername, status: 'pending'})) {
             return res.status(400).json({message: 'A request for this user is already pending'});
         }
+        if (type === 'ban' && group.admins.includes(targetUsername)) {
+            return res.status(403).json({message: 'Group Admin moderation must be handled by Super Admin'});
+        }
         await getDB().collection('requests').insertOne({
             type, groupId: group._id.toString(), groupTitle: group.title, targetUsername,
             reason: reason.trim(), requestedBy: req.user.username, status: 'pending', createdAt: new Date(),
@@ -288,7 +296,7 @@ export default function addAdminRoutes(app, io) {
                 return res.status(400).json({message: 'This user is no longer a group member'});
             }
             const error = request.type === 'ban'
-                ? await banMember(io, group, request.targetUsername, req.user.username, request.reason)
+                ? await banMember(io, group, request.targetUsername, req.user, request.reason)
                 : await deleteUser(io, request.targetUsername, req.user.username, request.reason);
             if (error) return res.status(400).json({message: error});
         }

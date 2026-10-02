@@ -3,7 +3,6 @@ import { getDB } from './db.js';
 
 const sessions = new Map();
 
-// Remember each login until logout or server restart.
 export function createSession(username) {
     const token = randomUUID();
     sessions.set(token, username);

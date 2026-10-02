@@ -31,7 +31,6 @@ connectSockets(io);
 app.use(cors());
 app.use(express.json({ limit: '3mb' }));
 
-// Check the login before checking permissions on individual routes.
 app.use('/api', async (req, res, next) => {
     if (req.method === 'POST' && ['/login', '/users'].includes(req.path)) return next();
     try {
@@ -252,7 +251,6 @@ app.patch('/api/users/:username', async (req, res) => {
     }
 });
 
-// Change only the logged-in user's password after checking their current one.
 app.patch('/api/users/:username/password', async (req, res) => {
     if (req.params.username !== req.user.username) {
         return res.status(403).json({message: 'You can only change your own password'});
@@ -363,8 +361,6 @@ app.post('/api/group-requests', async (req, res) => {
 });
 
 app.get('/api/group-requests', async (req, res) => {
-    const username = String(req.query.username ?? '').trim();
-
     try {
         const currentUser = req.user;
 
@@ -383,7 +379,7 @@ app.get('/api/group-requests', async (req, res) => {
 });
 
 app.patch('/api/group-requests/:requestId', async (req, res) => {
-    const { action, reviewedBy } = req.body;
+    const { action } = req.body;
 
     if (!['approve', 'reject'].includes(action)) {
         return res.status(400).json({message: 'Action must be approve or reject'});
@@ -669,8 +665,6 @@ app.post('/api/channel-requests', async (req, res) => {
 });
 
 app.get('/api/channel-requests', async (req, res) => {
-    const username = String(req.query.username ?? '').trim().toLowerCase();
-
     try {
         const groups = await getDB().collection('groups').find({admins: req.user.username}).toArray();
         const adminGroupTitles = groups.map(group => group.title);
@@ -687,7 +681,7 @@ app.get('/api/channel-requests', async (req, res) => {
 });
 
 app.patch('/api/channel-requests/:requestId', async (req, res) => {
-    const { action, reviewedBy } = req.body;
+    const { action } = req.body;
 
     if (!['approve', 'reject'].includes(action)) {
         return res.status(400).json({message: 'Action must be approve or reject'});

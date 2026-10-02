@@ -41,7 +41,7 @@
 
   @if (manageableGroups().length) {
     <details>
-      <summary>{{ currentUser.role === 'superAdmin' ? 'Assign group administrators' : 'Manage your groups' }}</summary>
+      <summary>{{ currentUser.role === 'superAdmin' ? 'Manage group administrators' : 'Manage your groups' }}</summary>
       <label for="manageGroup">Group</label>
       <select id="manageGroup" [(ngModel)]="groupId" (ngModelChange)="selectGroup()">
         <option value="">Select a group</option>
@@ -83,11 +83,13 @@
         </select>
         @if (group.members.includes(member)) {
           <div class="buttons">
-            @if (!group.admins.includes(member)) { <button (click)="manageMember('promote')">Make admin</button> }
-            @else { <button (click)="manageMember('demote')">Remove admin role</button> }
-            @if (currentUser.role !== 'superAdmin') { <button (click)="manageMember('remove')">Remove member</button> }
+            @if (currentUser.role === 'superAdmin') {
+              @if (!group.admins.includes(member)) { <button (click)="manageMember('promote')">Make admin</button> }
+              @else { <button (click)="manageMember('demote')">Remove admin role</button> }
+            }
+            @if (currentUser.role === 'superAdmin' || !group.admins.includes(member)) { <button (click)="manageMember('remove')">Remove member</button> }
           </div>
-          @if (currentUser.role !== 'superAdmin') {
+          @if (currentUser.role === 'superAdmin' || !group.admins.includes(member)) {
             <label for="banReason">Ban reason</label>
             <input id="banReason" [(ngModel)]="reason" maxlength="250" placeholder="Explain why the member should be banned" />
             <button class="danger" (click)="manageMember('ban')" [disabled]="!reason.trim()">Ban from group</button>
@@ -124,7 +126,7 @@
             <select id="reportUser" name="reportUser" [(ngModel)]="reportUsername" required>
               <option value="">Select another member</option>
               @for (username of group.members; track username) {
-                @if (username !== currentUser.username) { <option [value]="username">{{ username }}</option> }
+                @if (username !== currentUser.username && (reportType === 'deleteUser' || !group.admins.includes(username))) { <option [value]="username">{{ username }}</option> }
               }
               @if (group.admins.includes(currentUser.username)) {
                 @for (username of group.bannedMembers || []; track username) { <option [value]="username">{{ username }} (banned)</option> }
@@ -144,7 +146,7 @@
     </details>
     <details>
       <summary>Leave a group</summary>
-      <p>If you are its only admin, appoint another admin first.</p>
+      <p>If you are its only admin, ask Super Admin to appoint another admin first.</p>
       <label for="leaveGroup">Group</label>
       <select id="leaveGroup" [(ngModel)]="leaveGroupId">
         <option value="">Select a group</option>

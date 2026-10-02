@@ -32,10 +32,10 @@ describe('Socket rooms', () => {
     return socket;
   }
 
-  async function join(socket, channelName = 'chat') {
+  async function join(socket, channelName = 'chat', groupTitle = 'Study') {
     const history = nextEvent(socket, 'chat-history');
     const joined = nextEvent(socket, 'channel-joined');
-    socket.emit('join-channel', {groupTitle: 'Study', channelName});
+    socket.emit('join-channel', {groupTitle, channelName});
     const messages = await history;
     await joined;
     return messages;
@@ -45,6 +45,13 @@ describe('Socket rooms', () => {
     const received = nextEvent(socket, 'new-message');
     socket.emit('send-message', {text, image});
     return received;
+  }
+
+  async function api(socket, path, method, body = {}) {
+    const response = await request.execute(testUrl)[method]('/api' + path)
+      .set('Authorization', 'Bearer ' + socket.auth.token).send(body);
+    assert.equal(response.status, 200, JSON.stringify(response.body));
+    return response.body;
   }
 
   beforeEach(async () => {
@@ -163,4 +170,80 @@ describe('Socket rooms', () => {
     bob.disconnect();
     assert.equal(await left, 'bob left the room');
   });
+
+  it('keeps membership but blocks chat when minimum age is raised', async () => {
+    await db.collection('groups').updateOne({title: 'Study'}, {$set: {minimumAge: 0}});
+    await db.collection('users').updateOne({username: 'bob'}, {$set: {dateOfBirth: '2010-01-01'}});
+    const alice = await connect('alice');
+    const bob = await connect('bob');
+    await join(bob);
+    const group = await db.collection('groups').findOne({title: 'Study'});
+    const disconnected = nextEvent(bob, 'disconnect');
+    await api(alice, '/groups/' + group._id, 'patch', {description: group.description, minimumAge: 18});
+    await disconnected;
+    assert.equal((await db.collection('groups').findOne({_id: group._id})).members.includes('bob'), true);
+    const blocked = await connect('bob');
+    const rejected = nextEvent(blocked, 'chat-error');
+    blocked.emit('join-channel', {groupTitle: 'Study', channelName: 'chat'});
+    assert.match(await rejected, /do not have access/);
+    await api(alice, '/groups/' + group._id, 'patch', {description: group.description, minimumAge: 0});
+    await join(blocked);
+    assert.equal((await send(blocked, 'Eligible again')).text, 'Eligible again');
+  });
+
+  it('bans only the matching group connection and rejects its pending requests', async () => {
+    const alice = await connect('alice');
+    const studyChat = await connect('bob');
+    const gamesChat = await connect('bob');
+    await join(studyChat);
+    await join(gamesChat, 'chat', 'Games');
+    const group = await db.collection('groups').findOne({title: 'Study'});
+    await db.collection('requests').insertOne({type: 'channel', groupTitle: 'Study', requestedBy: 'bob', status: 'pending'});
+    const disconnected = nextEvent(studyChat, 'disconnect');
+    await api(alice, '/groups/' + group._id + '/members', 'patch', {action: 'ban', username: 'bob', reason: 'Spam'});
+    await disconnected;
+    assert.equal((await db.collection('requests').findOne({requestedBy: 'bob'})).status, 'rejected');
+    assert.equal((await send(gamesChat, 'Still in Games')).groupTitle, 'Games');
+  });
+
+  it('cleans up deleted accounts and rejects their existing login token', async () => {
+    await db.collection('groups').updateOne({title: 'Study'}, {$addToSet: {members: 'outsider'}});
+    const admin = await connect('admin');
+    const outsider = await connect('outsider');
+    await join(outsider);
+    await send(outsider, 'Will be removed');
+    const disconnected = nextEvent(outsider, 'disconnect');
+    await api(admin, '/users/outsider', 'delete');
+    await disconnected;
+    assert.equal(await db.collection('users').countDocuments({username: 'outsider'}), 0);
+    assert.equal(await db.collection('messages').countDocuments({username: 'outsider'}), 0);
+    assert.equal((await db.collection('groups').findOne({title: 'Study'})).members.includes('outsider'), false);
+    const response = await request.execute(testUrl).get('/api/groups').set('Authorization', 'Bearer ' + outsider.auth.token);
+    assert.equal(response.status, 401);
+  });
+
+  it('disconnects the socket and invalidates its token on logout', async () => {
+    const alice = await connect('alice');
+    await join(alice);
+    const disconnected = nextEvent(alice, 'disconnect');
+    await api(alice, '/logout', 'post');
+    await disconnected;
+    const response = await request.execute(testUrl).get('/api/groups').set('Authorization', 'Bearer ' + alice.auth.token);
+    assert.equal(response.status, 401);
+  });
+
+  for (const deletingGroup of [false, true]) {
+    it('disconnects chat and removes data when deleting a ' + (deletingGroup ? 'group' : 'channel'), async () => {
+      const alice = await connect('alice');
+      await join(alice);
+      await send(alice, 'Will be removed');
+      const group = await db.collection('groups').findOne({title: 'Study'});
+      const channel = await db.collection('channels').findOne({groupTitle: 'Study', name: 'chat'});
+      const disconnected = nextEvent(alice, 'disconnect');
+      await api(alice, deletingGroup ? '/groups/' + group._id : '/channels/' + channel._id, 'delete');
+      await disconnected;
+      assert.equal(await db.collection('messages').countDocuments({groupTitle: 'Study', channelName: 'chat'}), 0);
+      assert.equal(await db.collection('channels').countDocuments({groupTitle: 'Study', name: 'chat'}), 0);
+    });
+  }
 });

@@ -70,7 +70,6 @@ export class Dashboard implements OnInit {
   private groupService = inject(Group);
   private userService = inject(User);
 
-  // Read a small image so the existing profile request can save it to MongoDB.
   selectProfileImage(event: Event) {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];

@@ -7,7 +7,10 @@ export default defineConfig({
     baseUrl: 'http://localhost:4200',
     supportFile: false,
     setupNodeEvents(on) {
-      on('task', {resetDatabase: seedTestData});
+      on('task', {
+        resetDatabase: seedTestData,
+        clearDatabase: async () => { await clearTestData(); return null; },
+      });
       on('after:run', async () => {
         await clearTestData();
         await closeTestDB();

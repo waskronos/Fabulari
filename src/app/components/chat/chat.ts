@@ -174,7 +174,6 @@ export class Chat implements OnInit, OnDestroy {
     }
   }
 
-  // Preview the image before sending it through the existing socket message.
   selectImage(event: Event) {
     const input = event.target as HTMLInputElement;
     const file = input.files?.[0];

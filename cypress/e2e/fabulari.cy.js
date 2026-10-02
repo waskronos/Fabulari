@@ -14,6 +14,18 @@ describe('Fabulari user workflows', () => {
     cy.get('app-login button').click();
   }
 
+  function register(username) {
+    cy.visit('/register');
+    cy.get('#username').type(username);
+    cy.get('#firstName').type('New');
+    cy.get('#lastName').type('Member');
+    cy.get('#email').type(username + '@test.local');
+    cy.get('#dateOfBirth').type('2000-01-01');
+    cy.get('#password').type('TestPassword8');
+    cy.get('app-register button').click();
+    cy.get('[role=alert]').should('contain', 'User added successfully');
+  }
+
   it('redirects an unauthenticated visitor to login', () => {
     cy.visit('/dashboard');
     cy.url().should('include', '/login');
@@ -51,15 +63,7 @@ describe('Fabulari user workflows', () => {
   });
 
   it('registers an account and then logs in', () => {
-    cy.visit('/register');
-    cy.get('#username').type('newmember');
-    cy.get('#firstName').type('New');
-    cy.get('#lastName').type('Member');
-    cy.get('#email').type('newmember@test.local');
-    cy.get('#dateOfBirth').type('2000-01-01');
-    cy.get('#password').type('TestPassword8');
-    cy.get('app-register button').click();
-    cy.get('[role=alert]').should('contain', 'User added successfully');
+    register('newmember');
     login('newmember');
     cy.url().should('include', '/home');
     cy.get('.menu-button').click();
@@ -103,5 +107,52 @@ describe('Fabulari user workflows', () => {
     cy.get('#assignedAdmin').select('bob');
     cy.get('#directTitle').closest('form').find('button[type=submit]').click();
     cy.get('app-administration [role=alert]').should('contain', 'Group created and admin assigned');
+  });
+
+  it('does not give Group Admins admin-role or fellow-admin moderation buttons', () => {
+    login();
+    cy.get('nav a').contains('Dashboard').click();
+    cy.contains('summary', 'Manage your groups').click();
+    cy.get('#manageGroup').select('Study');
+    cy.get('#manageMember').select('bob');
+    cy.get('app-administration').should('not.contain', 'Make admin').and('not.contain', 'Remove admin role');
+    cy.contains('button', 'Remove member').should('be.visible');
+    cy.get('#manageMember').select('alice');
+    cy.get('#banReason').should('not.exist');
+    cy.get('app-administration').should('not.contain', 'Remove member');
+  });
+
+  it('lets Super Admin promote and then ban a group administrator', () => {
+    login('admin');
+    cy.contains('summary', 'Manage group administrators').click();
+    cy.get('#manageGroup').select('Study');
+    cy.get('#manageMember').select('bob');
+    cy.contains('button', 'Make admin').click();
+    cy.get('app-administration [role=alert]').should('contain', 'Group membership updated');
+    cy.get('#manageMember').select('bob (admin)');
+    cy.contains('button', 'Remove admin role').should('be.visible');
+    cy.get('#banReason').type('Repeated spam');
+    cy.contains('button', 'Ban from group').click();
+    cy.get('app-administration [role=alert]').should('contain', 'Member banned');
+    cy.get('#manageMember option').should('contain', 'bob (banned)');
+  });
+
+  it('does not show group administration controls to a non-admin member', () => {
+    login('bob');
+    cy.get('nav a').contains('Dashboard').click();
+    cy.contains('summary', 'Manage your groups').click();
+    cy.get('#manageGroup option').should('contain', 'Games').and('not.contain', 'Study');
+  });
+
+  it('bootstraps the first registration as Super Admin and the second as a user', () => {
+    cy.task('clearDatabase');
+    register('firstaccount');
+    login('firstaccount');
+    cy.url().should('include', '/dashboard');
+    cy.contains('h1', 'Super Admin dashboard').should('be.visible');
+    cy.contains('button', 'Logout').click();
+    register('secondaccount');
+    login('secondaccount');
+    cy.url().should('include', '/home');
   });
 });

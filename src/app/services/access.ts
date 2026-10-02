@@ -10,7 +10,6 @@ function getCurrentUser(): CurrentUser | null {
   }
 }
 
-// Redirect before opening a page that requires a login.
 export const authGuard: CanActivateFn = () => {
   const user = getCurrentUser();
   return !!user?.sessionToken || inject(Router).createUrlTree(['/login']);
@@ -20,7 +19,6 @@ export const chatGuard: CanActivateFn = () => {
   return getCurrentUser()?.role !== 'superAdmin' || inject(Router).createUrlTree(['/dashboard']);
 };
 
-// Attach the login token to a request to our server.
 export function sessionOptions() {
   const token = getCurrentUser()?.sessionToken;
   return {headers: {Authorization: `Bearer ${token || ''}`}};

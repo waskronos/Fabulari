@@ -8,7 +8,6 @@ function getRoomName(groupTitle, channelName) {
     return `${groupTitle.toLowerCase()}:${channelName.toLowerCase()}`;
 }
 
-// Use the logged-in account, then check this group's membership and age.
 async function getChannelAccess(groupTitle, channelName, token) {
     const user = await getSessionUser(token);
     if (!user || user.role === 'superAdmin') return null;

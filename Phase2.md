@@ -24,7 +24,7 @@ Phase 2 adds database storage, live text and image messages, message history, pr
 | Profile | Users change their first name, last name, date of birth and picture after entering their current password. Username/email stay unchanged. Password changes use a separate form. |
 | Groups | Users discover groups, request membership and request a new group. Super Admin approves/rejects group creation; approval makes the requester that group's admin. |
 | Direct creation | Super Admin can also create a group directly and assign an existing age-eligible user as its admin. |
-| Membership | Group Admins approve/reject membership requests, remove/ban/unban members and promote/demote admins in their own groups. Members can leave. The last admin is protected until another is appointed. |
+| Membership | Group Admins approve/reject membership requests and remove/ban/unban ordinary members in their own groups. Only Super Admin promotes/demotes admins or removes/bans an existing Group Admin. Members can leave. The last admin is protected until another is appointed. |
 | Group details | Group Admins edit description, minimum age, theme and icon. A higher age cannot exclude an existing admin. |
 | Channels | Group Admins create/delete channels directly. Members request new channels; their Group Admin approves/rejects them. |
 | Access | The server checks membership, group age and bans. Channels inherit group access and have no separate minimum age. Super Admin does not chat. |
@@ -37,6 +37,8 @@ Phase 2 adds database storage, live text and image messages, message history, pr
 | Audit | Super Admin filters actions by actor, action and dates. Records do not contain passwords or chat content. |
 
 Group Admin is not a global account role. A normal user administers a group only when their username appears in that group's `admins` array. Admin of Study does not mean admin of Games.
+
+Raising a group's minimum age keeps existing memberships recorded, but disconnects newly under-age chat participants and blocks their channel access. They regain access when their age meets the requirement or the minimum age is lowered; they do not need to request membership again. The age cannot be raised above an existing Group Admin's age. Ban reports target ordinary members; moderation of Group Admins is handled directly by Super Admin.
 
 Deleting groups/channels removes related saved chat data. Banning/removing members or deleting rooms closes affected live chats. There is no automatically created general group.
 
@@ -88,6 +90,14 @@ Chat component -> Socket service -> Socket.IO room -> MongoDB + room participant
 
 HTTP services return Angular HTTP observables. Socket listeners use ordinary callbacks: `new-message` makes the component add a message to its array. Leaving chat removes listeners and disconnects the socket.
 
+Angular routes are `/` (Landing), `/login` (Login), `/register` (Register), `/home` and `/dashboard` (Dashboard), and `/chat/:groupTitle/:channelName` or `/chat/:groupTitle` (Chat). Home/dashboard/chat require the login guard; chat also redirects Super Admin to their dashboard.
+
+| Model file | What its interfaces describe |
+|---|---|
+| `user.model.ts` | Registration/login input, returned CurrentUser, profile/password updates and API messages. |
+| `group.model.ts` | Group/channel request fields, pending request records and approve/reject decisions. |
+| `chat.model.ts` | Room selection, text/image input and saved message fields shown in chat. |
+
 Login tokens are stored in a server Map: token -> username. The browser keeps the returned account/token in localStorage. The server gets the current user from the token rather than trusting a submitted username. Tokens disappear on server restart, requiring another login. There are no JWTs or refresh tokens.
 
 ## 5. MongoDB data
@@ -127,7 +137,7 @@ Paths start with `/api`. Only registration/login are public; other routes requir
 | POST `/groups/join` | User; title, username | 200 message; pending membership. |
 | POST `/groups/approve` | This Group Admin; title, applicant username | 200 message. |
 | POST `/groups/reject` | This Group Admin; groupId, applicant username | 200 message. |
-| PATCH `/groups/:groupId/members` | action, username, optional reason | 200 message. Admin: remove/ban/unban/promote/demote. Member: leave self. Super Admin: promote/demote. |
+| PATCH `/groups/:groupId/members` | action, username, optional reason | 200 message. Group Admin: remove/ban/unban ordinary members. Member: leave self. Super Admin: promote/demote/remove/ban; last admin remains protected. |
 | POST `/group-requests` | User; title, description, minimumAge, requestedBy | 201 message. |
 | GET `/group-requests` | User or Super Admin | 200 own requests, or pending requests for Super Admin. |
 | PATCH `/group-requests/:requestId` | Super Admin; action approve/reject | 200 message. |
@@ -180,9 +190,23 @@ Messages are saved before broadcasting. Sending/deleting recheck access so an ol
 
 Navigation is dark purple with a pink brand and hamburger account menu. Profile forms use native expandable details sections. Moderation uses red styling. Forms have labels, images have alternative text and alerts display status/errors. Layouts wrap on smaller screens. These measures are not a complete accessibility audit.
 
+Updated screen sketches (the hamburger menu opens over the page):
+
+```text
+HOME                     PROFILE DASHBOARD           CHAT
+Navigation               Navigation                  Navigation
+Fabulari heading         Account summary             Group/icon | Channel heading
+Group counts             > Edit profile               Channels   | Messages
+Your groups/channels     > Change password            Create or  | Notices
+Discover/search/join     Memberships and requests     request    | Image preview
+Create group request     > Administrative sections    channel    | Composer
+```
+
+On narrow screens, group cards and form grids stack vertically; the chat channel panel and messages also stack rather than needing a wide desktop layout.
+
 ## 9. Testing
 
-Tests follow course patterns: Angular TestBed/Vitest, Mocha with assert/Chai/chai-http, and Cypress. No Supertest or Playwright is used.
+Tests follow course patterns: Angular TestBed/Vitest, Mocha with assert/Chai/chai-http, and Cypress.
 
 Verified on 2 October 2026:
 
@@ -190,12 +214,40 @@ Verified on 2 October 2026:
 |---|---|---|
 | Angular | Nine files: navigation, account pages, dashboard, chat routing, administration and HTTP services. Services use HTTP testing providers; components use mocks. | 22 passed |
 | Node unit | Age calculation, image validation and token generation. | 9 passed |
-| API integration | Accounts, requests, group permissions, moderation, deletion and audit filtering. | 42 passed |
-| Socket integration | Access/age, rooms, images, five-message history, deletion and notifications. | 9 passed |
-| Cypress | Login/registration, redirects/menu, group search/requests/membership, collapsed profile and direct Super Admin group creation. | 10 passed |
+| API integration | Accounts, requests, group permissions, moderation, deletion and audit filtering, including Group Admin protection. | 45 passed |
+| Socket integration | Access/age, rooms, images, history, deletion, notifications, raised-age behaviour and live moderation/session cleanup. | 15 passed |
+| Cypress | Login/registration, redirects/menu, groups, profile, role-specific controls and first-account bootstrap. | 14 passed |
 | Production build | Angular compilation. | Passed; dashboard CSS exceeds the 4 KB warning budget by 863 bytes. |
 
 These results cover the named tests, not every possible input or browser.
+
+### Method and evidence
+
+Tests follow arrange -> act -> assert: prepare known input, perform the action and compare the actual result with the expected result. Angular component tests supply mock services; service tests use HttpTestingController to inspect and answer HTTP requests without calling a real server. Mocha integration tests make real HTTP/socket requests and inspect the resulting MongoDB records. Cypress performs visible browser actions and checks page content and navigation.
+
+Fixtures create five test accounts, two groups and three channels. Each integration/browser test resets the disposable database, so results do not depend on previous tests or presentation data. The first-user tests deliberately clear those fixtures before registration. The following table lists the tested scenarios and expected outcomes; all passed in the final run (105 named tests in total).
+
+| Area / test files | Scenarios checked | Expected outcome |
+|---|---|---|
+| Angular `app.spec.ts`, `landing.spec.ts` | Component creation, brand, opening/closing account menu. | Correct elements and menu state. |
+| Angular `login.spec.ts`, `register.spec.ts` | Login storage/redirects/errors, registration and future birthday validation. | Role-appropriate navigation; invalid input does not submit. |
+| Angular `dashboard.spec.ts`, `administration.spec.ts` | Per-group admin access, review permissions, success refresh and permission errors. | Only authorised controls/actions; errors are shown, not treated as success. |
+| Angular `chat.spec.ts` | Channel route changes, draft reset and member request vs admin creation. | Correct room/form action for the selected group. |
+| Angular `group.spec.ts`, `user.spec.ts` | Service creation, HTTP methods/bodies and login header. | Correct requests and returned data. |
+| Unit `helpers.test.js` | Birthday today/before/after; empty/valid/fake/SVG/oversized images; separate login tokens. | Correct age, supported small images only, distinct tokens. |
+| API `routes.test.js`: accounts | Registration/hash, first-account Super Admin, duplicate username, over-72-byte password, valid/invalid login, profile/email and password change. | Password hashes saved; invalid requests rejected; email unchanged. |
+| API: session and permissions | Missing token, logout token reuse, impersonation and admin-of-another-group access. | Unauthorised requests rejected. |
+| API: groups | List/direct creation, ordinary-user restrictions, request creation/approval/rejection and metadata editing. | Correct records and assigned admin. |
+| API: membership | Request/approve/reject, under-age join, leave/remove, ban/rejoin/unban and last-admin protection. | Correct membership/request status and protected last admin. |
+| API: admin authority | Super Admin promotion/demotion; Group Admin cannot promote/demote/remove/ban another admin; reports cannot bypass this after promotion. | Roles stay unchanged on forbidden actions; Super Admin actions succeed. |
+| API: channels | Accessible list, direct creation permissions, request approval/rejection and deletion. | Only eligible channels returned; correct creation/deletion. |
+| API: moderation/accounts/audit | Reports/reasons/decisions, account list permission/hash exclusion, deletion/last-admin protection and audit filters. | Correct restricted records, cleanup and action logs. |
+| Socket `sockets.test.js`: rooms/messages | Missing login, nonmember/Super Admin/under-age access, room isolation, real/fake image, five-message order, own/older-visible deletion and join/leave notices. | Access enforced; saved messages broadcast only to the right room. |
+| Socket: changing access | Raised/lowered age, ban in one group, account deletion, logout, group/channel deletion. | Correct disconnections, preserved age-blocked membership, unrelated chat unaffected and invalid tokens rejected. |
+| Cypress `fabulari.cy.js` | Anonymous redirect, bad/good login, menu, search, registration validation/success, group/membership requests, profile collapse, direct creation and role controls. | Browser follows the intended user workflows with visible feedback. |
+| Cypress: bootstrap | First and second registrations in a freshly emptied test database. | First sees Super Admin dashboard; second opens normal Home. |
+
+Verified environment: Windows, Node.js 24.18.1, local MongoDB 6.0, Angular/Vitest and Cypress 16.1.1 using its bundled Electron browser. Terminal/browser runner output provides the pass/fail results; no test recording or screenshots are required to execute the suites. The full named cases remain in the test files.
 
 ```powershell
 npm test -- --watch=false

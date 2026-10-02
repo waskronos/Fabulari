@@ -2,6 +2,7 @@ import { ObjectId } from 'mongodb';
 import { getDB } from './db.js';
 import { calculateAge, getSessionUser } from './access.js';
 import { isValidImage } from './images.js';
+import { recordAudit } from './audit.js';
 
 function getRoomName(groupTitle, channelName) {
     return `${groupTitle.toLowerCase()}:${channelName.toLowerCase()}`;
@@ -15,10 +16,11 @@ async function getChannelAccess(groupTitle, channelName, token) {
     const channel = await getDB().collection('channels').findOne({groupTitle, name: channelName});
     const age = user.dateOfBirth ? calculateAge(user.dateOfBirth) : user.age;
     if (!group || !channel || !group.members.includes(user.username) ||
-        !Number.isFinite(age) || age < group.minimumAge) return null;
+        !Number.isFinite(age) || age < group.minimumAge || (group.bannedMembers || []).includes(user.username)) return null;
     return {
         groupTitle: group.title, channelName: channel.name, username: user.username,
         isModerator: group.admins.includes(user.username), profileImage: user.profileImage || '',
+        theme: group.theme || 'default',
     };
 }
 
@@ -101,7 +103,7 @@ export default function connectSockets(io) {
                     return {...message, profileImage: users.find(user => user.username === message.username)?.profileImage || ''};
                 });
                 socket.emit('chat-history', history);
-                socket.emit('channel-joined');
+                socket.emit('channel-joined', {theme: access.theme});
                 socket.to(roomName).emit('room-notification', `${access.username} joined the room`);
             } catch (error) {
                 socket.emit('chat-error', 'Channel could not be opened');
@@ -181,6 +183,7 @@ export default function connectSockets(io) {
                     groupTitle: access.groupTitle, channelName: access.channelName,
                 });
                 messageOwners.get(channel.roomName)?.delete(id);
+                await recordAudit(access.username, 'message deleted', `${access.groupTitle}/#${access.channelName}`, id);
                 io.to(channel.roomName).emit('message-deleted', id);
             } catch {
                 socket.emit('chat-error', 'Message could not be deleted');

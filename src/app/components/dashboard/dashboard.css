@@ -1,29 +1,18 @@
 :host {
   display: block;
   min-height: calc(100vh - 55px);
-  background: #0d0f14;
+  background: #24172f;
   color: #f5f6fa;
   font-family: Arial, sans-serif;
 }
 
 .dashboard-shell {
   display: grid;
-  grid-template-columns: 260px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   min-height: calc(100vh - 55px);
 }
 
-.sidebar {
-  position: sticky;
-  top: 0;
-  height: calc(100vh - 55px);
-  box-sizing: border-box;
-  padding: 22px 16px;
-  overflow-y: auto;
-  border-right: 1px solid #282b35;
-  background: #15171e;
-}
 
-.sidebar-profile,
 .profile-details,
 .group-card-heading,
 .section-heading,
@@ -33,13 +22,7 @@
   align-items: center;
 }
 
-.sidebar-profile {
-  gap: 12px;
-  padding: 0 8px 20px;
-  border-bottom: 1px solid #2b2e38;
-}
 
-.sidebar-profile div:last-child,
 .profile-details div:nth-child(2) {
   display: flex;
   min-width: 0;
@@ -47,16 +30,7 @@
   gap: 3px;
 }
 
-.sidebar-profile strong,
-.sidebar-profile span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.sidebar-profile span,
-.profile-details span,
-.sidebar-group small {
+.profile-details span {
   color: #999eac;
   font-size: 0.82rem;
 }
@@ -79,24 +53,6 @@
   border-radius: 16px;
 }
 
-.sidebar-link {
-  display: block;
-  margin-top: 8px;
-  padding: 10px 12px;
-  border-radius: 7px;
-  color: #dfe1e8;
-  text-decoration: none;
-}
-
-.sidebar-link:hover {
-  background: #252832;
-}
-
-.active-link {
-  background: #302946;
-  color: #d0c7ff;
-}
-
 .home-heading h1 {
   margin: 0;
   font-size: 2.6rem;
@@ -117,49 +73,12 @@
   font-weight: 700;
 }
 
-.sidebar-heading {
-  display: flex;
-  justify-content: space-between;
-  margin: 24px 10px 8px;
-  color: #898e9c;
-  font-size: 0.75rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
 
-.sidebar-group {
-  padding: 10px 8px;
-}
 
-.sidebar-group strong {
-  display: block;
-  margin-bottom: 5px;
-}
 
-.sidebar-group button {
-  width: 100%;
-  margin: 2px 0;
-  padding: 8px 10px;
-  text-align: left;
-  background: transparent;
-  color: #bfc3cf;
-}
 
-.sidebar-group button:hover {
-  background: #282b35;
-  color: white;
-}
 
-.sidebar-group button span {
-  color: #777d8c;
-}
 
-.empty-sidebar {
-  padding: 0 10px;
-  color: #858a98;
-  font-size: 0.85rem;
-}
 
 .dashboard {
   width: 100%;
@@ -265,12 +184,6 @@
   background: #211e35;
 }
 
-.general-chat-button {
-  padding: 0;
-  background: transparent;
-  font-size: 1.35rem;
-  text-align: left;
-}
 
 .content-section {
   margin-top: 22px;
@@ -444,17 +357,7 @@ p {
     grid-template-columns: 1fr;
   }
 
-  .sidebar {
-    position: static;
-    height: auto;
-    border-right: none;
-    border-bottom: 1px solid #282b35;
-  }
 
-  .group-list {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 
   .profile-card,
   .section-heading {
@@ -479,9 +382,6 @@ p {
     padding: 18px;
   }
 
-  .group-list {
-    grid-template-columns: 1fr;
-  }
 
   .form-grid {
     grid-template-columns: 1fr;
@@ -499,3 +399,5 @@ p {
 .image-preview { width: 64px; height: 64px; border-radius: 50%; object-fit: cover; }
 .image-picker small { color: #aeb1bd; }
 input[readonly] { opacity: 0.65; }
+.create-group-link { color: #eed2fb; font-size: 1.35rem; font-weight: 700; text-decoration: none; }
+.group-icon { object-fit: cover; flex-shrink: 0; }

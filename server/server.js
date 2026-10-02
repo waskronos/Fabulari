@@ -7,12 +7,13 @@ import { createServer } from 'http';
 import { Server } from 'socket.io';
 import {
     connectDB,
-    ensureGeneralChat,
     getDB,
 } from './db.js';
 import connectSockets from './sockets.js';
 import { calculateAge, createSession, endSession, getSessionUser } from './access.js';
 import { isValidImage } from './images.js';
+import { recordAudit } from './audit.js';
+import addAdminRoutes from './admin.js';
 
 const app = express();
 const port = Number(process.env.HTTP_PORT) || 3000;
@@ -76,6 +77,9 @@ app.post('/api/users', async (req, res) => {
     if (newUser.password.length < 8) {
         return res.status(400).json({message: 'Password must be at least 8 characters'});
     }
+    if (Buffer.byteLength(newUser.password) > 72) {
+        return res.status(400).json({message: 'Password cannot exceed 72 bytes'});
+    }
     
     if(!/[A-Z]/.test(newUser.password)){
         return res.status(400).json({message: 'Password must contain at least one uppercase letter'
@@ -126,19 +130,11 @@ app.post('/api/users', async (req, res) => {
              newUser.password = hashedPassword;
              
              await getDB().collection('users').insertOne(newUser);
-             if (newUser.role !== 'superAdmin') {
-                await getDB().collection('groups').updateOne(
-                    { title: 'Fabulari' },
-                    { $addToSet: { members: newUser.username } }
-                );
-             }
+             await recordAudit(newUser.username, 'user created', newUser.username);
              return res.json({message: 'User added successfully'});
     } catch (error) {
         console.error('Error creating user:', error);
         return res.status(500).json({message: 'Failed to save user data'});
-    }
-    if (Buffer.byteLength(newUser.password) > 72) {
-        return res.status(400).json({message: 'Password cannot exceed 72 bytes'});
     }
 });
 
@@ -164,12 +160,6 @@ app.post('/api/login', async (req, res) => {
             return res.status(401).json({ message: 'Invalid credentials' });
         }
 
-        if (user.role !== 'superAdmin') {
-            await getDB().collection('groups').updateOne(
-                { title: 'Fabulari' },
-                { $addToSet: { members: user.username } }
-            );
-        }
 
         return res.json({
             message: 'Login successful',
@@ -240,6 +230,7 @@ app.patch('/api/users/:username', async (req, res) => {
             profileImage,
         };
         await users.updateOne({ _id: user._id }, { $set: profile });
+        await recordAudit(user.username, 'profile updated', user.username);
         if (dateOfBirth !== user.dateOfBirth) {
             for (const socket of io.sockets.sockets.values()) {
                 if (socket.data.channel?.username === user.username) socket.disconnect(true);
@@ -286,6 +277,7 @@ app.patch('/api/users/:username/password', async (req, res) => {
         }
         const password = await bcrypt.hash(newPassword, 10);
         await getDB().collection('users').updateOne({_id: req.user._id}, {$set: {password}});
+        await recordAudit(req.user.username, 'password changed', req.user.username);
         return res.json({message: 'Password updated successfully'});
     } catch {
         return res.status(500).json({message: 'Password could not be changed'});
@@ -362,6 +354,7 @@ app.post('/api/group-requests', async (req, res) => {
             createdAt: new Date().toISOString(),
         });
 
+        await recordAudit(req.user.username, 'group requested', cleanTitle);
         return res.status(201).json({message: 'Group request sent to the Super Admin'});
     } catch (error) {
         console.error('Error creating group request:', error);
@@ -431,6 +424,8 @@ app.patch('/api/group-requests/:requestId', async (req, res) => {
                 admins: [requester.username],
                 members: [requester.username],
                 joinRequests: [],
+                bannedMembers: [],
+                theme: 'default',
             });
         }
 
@@ -445,6 +440,7 @@ app.patch('/api/group-requests/:requestId', async (req, res) => {
             }
         );
 
+        await recordAudit(req.user.username, `group request ${action}`, request.title);
         return res.status(200).json({
             message: action === 'approve' ? 'Group request approved' : 'Group request rejected'
         });
@@ -476,6 +472,9 @@ app.post('/api/groups/join', async (req, res) => {
         if(!groupFound) {
                 return res.status(404).json({message: 'Group not found'});
         }
+        if ((groupFound.bannedMembers || []).includes(userFound.username)) {
+            return res.status(403).json({message: 'You are banned from this group'});
+        }
 
         const userAge = userFound.dateOfBirth
             ? calculateAge(userFound.dateOfBirth)
@@ -497,6 +496,12 @@ app.post('/api/groups/join', async (req, res) => {
             { _id: groupFound._id },
             { $addToSet: { joinRequests: userFound.username } }
         );
+        await getDB().collection('requests').insertOne({
+            type: 'membership', groupId: groupFound._id.toString(), groupTitle: groupFound.title,
+            requestedBy: userFound.username, targetUsername: userFound.username,
+            reason: 'Request to join this group', status: 'pending', createdAt: new Date(),
+        });
+        await recordAudit(req.user.username, 'membership requested', groupFound.title);
         return res.status(200).json({message: 'Join request sent successfully'});
     } catch (error) {
         console.error('Error requesting group membership:', error);
@@ -527,7 +532,8 @@ app.post('/api/groups/approve', async (req, res) => {
         }
         const applicant = await getDB().collection('users').findOne({username: approvalData.username});
         const age = applicant?.dateOfBirth ? calculateAge(applicant.dateOfBirth) : applicant?.age;
-        if (!applicant || applicant.role === 'superAdmin' || !Number.isFinite(age) || age < groupFound.minimumAge) {
+        if (!applicant || applicant.role === 'superAdmin' || !Number.isFinite(age) || age < groupFound.minimumAge ||
+            (groupFound.bannedMembers || []).includes(approvalData.username)) {
             return res.status(400).json({message: 'User does not meet this group\'s requirements'});
         }
 
@@ -544,6 +550,10 @@ app.post('/api/groups/approve', async (req, res) => {
                 $addToSet: { members: approvalData.username },
             }
         );
+        await getDB().collection('requests').updateMany({
+            type: 'membership', groupTitle: groupFound.title, requestedBy: approvalData.username, status: 'pending',
+        }, {$set: {status: 'approved', reviewedBy: req.user.username, reviewedAt: new Date()}});
+        await recordAudit(req.user.username, 'membership approved', groupFound.title, approvalData.username);
         return res.status(200).json({message: 'User added to group successfully'});
     } catch (error) {
         console.error('Error approving group membership:', error);
@@ -587,6 +597,7 @@ app.post('/api/channels', async (req, res) => {
             createdBy: groupAdmin,
         });
 
+        await recordAudit(req.user.username, 'channel created', `${groupFound.title}/#${cleanName}`);
         return res.status(201).json({message: 'Channel created successfully'});
     } catch (error) {
         console.error('Error creating channel:', error);
@@ -615,6 +626,10 @@ app.post('/api/channel-requests', async (req, res) => {
         }
         if (requester.role === 'superAdmin' || !groupFound.members.includes(requester.username)) {
             return res.status(403).json({message: 'Only group members can request channels'});
+        }
+        const age = requester.dateOfBirth ? calculateAge(requester.dateOfBirth) : requester.age;
+        if (!Number.isFinite(age) || age < groupFound.minimumAge || (groupFound.bannedMembers || []).includes(requester.username)) {
+            return res.status(403).json({message: 'You no longer meet this group\'s requirements'});
         }
         if (groupFound.admins.includes(requester.username)) {
             return res.status(400).json({message: 'Group admins can create channels directly'});
@@ -645,6 +660,7 @@ app.post('/api/channel-requests', async (req, res) => {
             createdAt: new Date().toISOString(),
         });
 
+        await recordAudit(req.user.username, 'channel requested', `${groupFound.title}/#${cleanName}`);
         return res.status(201).json({message: 'Channel request sent to the Group Admin'});
     } catch (error) {
         console.error('Error creating channel request:', error);
@@ -707,6 +723,12 @@ app.patch('/api/channel-requests/:requestId', async (req, res) => {
             if (channelExists) {
                 return res.status(400).json({message: 'Channel already exists in this group'});
             }
+            const requester = await getDB().collection('users').findOne({username: request.requestedBy});
+            const age = requester?.dateOfBirth ? calculateAge(requester.dateOfBirth) : requester?.age;
+            if (!requester || requester.role === 'superAdmin' || !groupFound.members.includes(requester.username) ||
+                !Number.isFinite(age) || age < groupFound.minimumAge || (groupFound.bannedMembers || []).includes(requester.username)) {
+                return res.status(400).json({message: 'Requesting user no longer meets the group requirements'});
+            }
 
             await getDB().collection('channels').insertOne({
                 name: request.name,
@@ -726,6 +748,7 @@ app.patch('/api/channel-requests/:requestId', async (req, res) => {
             }
         );
 
+        await recordAudit(req.user.username, `channel request ${action}`, `${request.groupTitle}/#${request.name}`);
         return res.status(200).json({
             message: action === 'approve' ? 'Channel request approved' : 'Channel request rejected'
         });
@@ -735,9 +758,14 @@ app.patch('/api/channel-requests/:requestId', async (req, res) => {
     }
 });
 
-app.get('/api/channels', async (_req, res) => {
+app.get('/api/channels', async (req, res) => {
     try {
-        const channels = await getDB().collection('channels').find().toArray();
+        const age = req.user.dateOfBirth ? calculateAge(req.user.dateOfBirth) : req.user.age;
+        const filter = req.user.role === 'superAdmin' ? {} : {
+            members: req.user.username, bannedMembers: {$ne: req.user.username}, minimumAge: {$lte: age},
+        };
+        const groups = await getDB().collection('groups').find(filter).project({title: 1}).toArray();
+        const channels = await getDB().collection('channels').find({groupTitle: {$in: groups.map(group => group.title)}}).toArray();
         return res.status(200).json(channels);
     } catch (error) {
         console.error('Error loading channels:', error);
@@ -745,10 +773,11 @@ app.get('/api/channels', async (_req, res) => {
     }
 });
 
+addAdminRoutes(app, io);
+
 async function startServer() {
     try {
         await connectDB();
-        await ensureGeneralChat();
 
         httpServer.listen(port, () => {
             console.log(`Server running on port ${port}`);

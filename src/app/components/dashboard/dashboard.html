@@ -1,51 +1,5 @@
 @if (currentuser) {
   <div class="dashboard-shell">
-    <aside class="sidebar">
-      <div class="sidebar-profile">
-        @if (currentuser.profileImage) {
-          <img class="avatar profile-image" [src]="currentuser.profileImage" alt="Your profile image" />
-        } @else {
-          <div class="avatar">{{ getInitials() }}</div>
-        }
-        <div>
-          <strong>{{ currentuser.firstName }} {{ currentuser.lastName }}</strong>
-          <span>&#64;{{ currentuser.username }}</span>
-        </div>
-      </div>
-
-      <a class="sidebar-link" routerLink="/home" [class.active-link]="isHome">Home</a>
-      <a class="sidebar-link" routerLink="/dashboard" [class.active-link]="!isHome">Profile dashboard</a>
-
-      @if (currentuser.role !== 'superAdmin') {
-        <div class="sidebar-heading">
-          <span>Your groups</span>
-          <span>{{ getJoinedGroups().length }}</span>
-        </div>
-
-        <div class="group-list">
-          @for (group of getJoinedGroups(); track group.title) {
-            <div class="sidebar-group">
-              <strong>{{ group.title }}</strong>
-
-              @for (channel of getChannelsForGroup(group.title); track channel.name) {
-                <button type="button" (click)="openChannel(group.title, channel.name)">
-                  <span>#</span> {{ channel.name }}
-                </button>
-              } @empty {
-                <small>No channels yet</small>
-              }
-            </div>
-          } @empty {
-            <p class="empty-sidebar">No groups joined yet.</p>
-          }
-        </div>
-
-        <a class="sidebar-link" routerLink="/home" fragment="discover-groups">Discover groups</a>
-        <a class="sidebar-link" routerLink="/dashboard" fragment="request-group">Request a group</a>
-      } @else {
-        <a class="sidebar-link" routerLink="/dashboard" fragment="admin-workspace">Admin workspace</a>
-      }
-    </aside>
 
     <main class="dashboard" id="home">
       @if (feedbackMessage()) {
@@ -56,7 +10,6 @@
 
       @if (isHome) {
         <header class="home-heading">
-          <p class="eyebrow">Your communities</p>
           <h1>Fabulari</h1>
           <p>Find a group, meet your community and start chatting.</p>
         </header>
@@ -84,8 +37,8 @@
             <button class="secondary-button" (click)="logout()">Logout</button>
           </div>
         </section>
-        <section class="content-section">
-          <h2>Edit profile</h2>
+        <details class="content-section">
+          <summary>Edit profile</summary>
           <p>Your username and email stay the same. Add a profile image to appear beside your chat messages.</p>
           <form (ngSubmit)="saveProfile()">
             <div class="form-grid">
@@ -117,12 +70,12 @@
             </div>
             <button type="submit">Save profile</button>
           </form>
-        </section>
+        </details>
       }
 
       @if (!isHome) {
-        <section class="content-section">
-          <h2>Change password</h2>
+        <details class="content-section">
+          <summary>Change password</summary>
           <p>Use 8–72 characters with at least one uppercase letter.</p>
           <form (ngSubmit)="changePassword()">
             <div class="form-grid">
@@ -135,7 +88,7 @@
             </div>
             <button type="submit">Change password</button>
           </form>
-        </section>
+        </details>
       }
 
       @if (currentuser.role === 'superAdmin') {
@@ -176,30 +129,34 @@
             </div>
             <div class="stat-card">
               <span>Available groups</span>
-              <strong>{{ groups().length }}</strong>
+              <strong>{{ groups().length - getJoinedGroups().length }}</strong>
             </div>
             <div class="stat-card stat-highlight">
-              <span>Start chatting</span>
-              <button class="general-chat-button" type="button" (click)="openGeneralChat()">Open #general</button>
+              <span>Create a group</span>
+              <a class="create-group-link" routerLink="/home" fragment="create-group">Request a group</a>
             </div>
           </section>
 
           <section class="content-section">
             <div class="section-heading">
               <div>
-                <p class="eyebrow">Your communities</p>
                 <h2>Your groups</h2>
               </div>
             </div>
             <div class="card-grid">
               @for (group of getJoinedGroups(); track group.title) {
                 <article class="group-card">
-                  <h3>{{ group.title }}</h3>
+                  <div class="group-card-heading">
+                    @if (group.icon) { <img class="group-icon" [src]="group.icon" [alt]="group.title + ' icon'" /> }
+                    @else { <div class="group-icon">{{ group.title[0].toUpperCase() }}</div> }
+                    <h3>{{ group.title }}</h3>
+                  </div>
                   <span [class.admin-badge]="isGroupAdmin(group)" [class.joined-badge]="!isGroupAdmin(group)">
                     {{ isGroupAdmin(group) ? 'Admin' : 'Member' }}
                   </span>
                   <p>{{ group.description }}</p>
                   <div class="button-row channel-buttons">
+                    <button class="secondary-button" type="button" [routerLink]="['/chat', group.title]">Open group</button>
                     @for (channel of getChannelsForGroup(group.title); track channel.name) {
                       <button type="button" (click)="openChannel(group.title, channel.name)">
                         # {{ channel.name }}
@@ -218,7 +175,6 @@
           <section class="content-section" id="discover-groups">
             <div class="section-heading">
               <div>
-                <p class="eyebrow">Communities</p>
                 <h2>Discover groups</h2>
               </div>
               <input
@@ -234,7 +190,8 @@
               @for (group of getFilteredGroups(); track group.title) {
                 <article class="group-card">
                   <div class="group-card-heading">
-                    <div class="group-icon">{{ group.title[0].toUpperCase() }}</div>
+                    @if (group.icon) { <img class="group-icon" [src]="group.icon" [alt]="group.title + ' icon'" /> }
+                    @else { <div class="group-icon">{{ group.title[0].toUpperCase() }}</div> }
                     <div>
                       <h3>{{ group.title }}</h3>
                       <span>{{ group.members.length }} members</span>
@@ -246,8 +203,6 @@
                     <span>Age {{ group.minimumAge }}+</span>
                     @if (group.admins.length) {
                       <span>Admin: {{ group.admins.join(', ') }}</span>
-                    } @else {
-                      <span>Fabulari community</span>
                     }
                   </div>
 
@@ -263,6 +218,23 @@
                 <div class="empty-card">No groups match your search.</div>
               }
             </div>
+          </section>
+          <section class="content-section" id="create-group">
+            <h2>Create a group</h2>
+            <p>Send a group proposal to Super Admin for approval. If approved, you become its Group Admin.</p>
+
+              <div class="form-grid">
+                <label for="groupTitle">Group title</label>
+                <input id="groupTitle" type="text" [(ngModel)]="groupTitle" maxlength="30" />
+
+                <label for="groupDescription">Description</label>
+                <textarea id="groupDescription" [(ngModel)]="groupDescription" maxlength="250"></textarea>
+
+                <label for="groupMinimumAge">Minimum age</label>
+                <input id="groupMinimumAge" type="number" min="0" [(ngModel)]="minimumAge" />
+              </div>
+              <button (click)="requestGroup()">Send request</button>
+
           </section>
         } @else {
           @if (isGroupAdminOfAnyGroup()) {
@@ -326,49 +298,14 @@
             </div>
           </section>
 
+          @if (isGroupAdminOfAnyGroup()) {
           <section class="content-section actions-section" id="request-group">
             <div class="section-heading">
               <div>
                 <p class="eyebrow">Manage</p>
-                <h2>Requests and channels</h2>
+                <h2>Channels you manage</h2>
               </div>
             </div>
-
-            <details>
-              <summary>Request a new group</summary>
-              <div class="form-grid">
-                <label for="groupTitle">Group title</label>
-                <input id="groupTitle" type="text" [(ngModel)]="groupTitle" maxlength="30" />
-
-                <label for="groupDescription">Description</label>
-                <textarea id="groupDescription" [(ngModel)]="groupDescription" maxlength="250"></textarea>
-
-                <label for="groupMinimumAge">Minimum age</label>
-                <input id="groupMinimumAge" type="number" min="0" [(ngModel)]="minimumAge" />
-              </div>
-              <button (click)="requestGroup()">Send request</button>
-            </details>
-
-            @if (isMemberOnlyOfAnyGroup()) {
-              <details>
-                <summary>Request a channel</summary>
-                <div class="form-grid">
-                  <label for="channelGroup">Group</label>
-                  <select id="channelGroup" [(ngModel)]="selectedGroupTitle">
-                    <option value="">Select group</option>
-                    @for (group of groups(); track group.title) {
-                      @if (isMemberOnly(group)) {
-                        <option [value]="group.title">{{ group.title }}</option>
-                      }
-                    }
-                  </select>
-
-                  <label for="channelName">Channel name</label>
-                  <input id="channelName" type="text" [(ngModel)]="channelName" />
-                </div>
-                <button (click)="requestChannel()">Send channel request</button>
-              </details>
-            }
 
             @if (isGroupAdminOfAnyGroup()) {
               <details>
@@ -406,7 +343,11 @@
               </details>
             }
           </section>
+          }
         }
+      }
+      @if (!isHome) {
+        <app-administration [currentUser]="currentuser" [groups]="groups()" [channels]="channels()" (changed)="loadGroups(); loadChannels()" />
       }
     </main>
   </div>

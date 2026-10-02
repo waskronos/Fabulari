@@ -12,5 +12,6 @@ export const routes: Routes = [
   { path: 'register', component: Register },
   { path: 'dashboard', component: Dashboard, canActivate: [authGuard] },
   { path: 'home', component: Dashboard, canActivate: [authGuard] },
-  { path: 'chat/:groupTitle/:channelName', component: Chat, canActivate: [authGuard, chatGuard] }
+  { path: 'chat/:groupTitle/:channelName', component: Chat, canActivate: [authGuard, chatGuard] },
+  { path: 'chat/:groupTitle', component: Chat, canActivate: [authGuard, chatGuard] }
 ]

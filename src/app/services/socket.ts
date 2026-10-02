@@ -41,7 +41,7 @@ export class SocketService {
     this.socket?.on('connect', callback);
   }
 
-  onJoined(callback: () => void) {
+  onJoined(callback: (channel: {theme: string}) => void) {
     this.socket?.on('channel-joined', callback);
   }
 
@@ -65,6 +65,14 @@ export class SocketService {
 
   onDeleted(callback: (id: string) => void) {
     this.socket?.on('message-deleted', callback);
+  }
+
+  onUserDeleted(callback: (username: string) => void) {
+    this.socket?.on('user-deleted', callback);
+  }
+
+  onThemeChanged(callback: (theme: string) => void) {
+    this.socket?.on('theme-updated', callback);
   }
 
   disconnect() {

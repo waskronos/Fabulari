@@ -4,6 +4,8 @@ import { FormsModule } from '@angular/forms';
 import { ActivatedRoute, Router } from '@angular/router';
 import { ChatMessage } from '../../models/chat.model';
 import { SocketService } from '../../services/socket';
+import { Group } from '../../services/group';
+import { Subscription } from 'rxjs';
 
 @Component({
   selector: 'app-chat',
@@ -23,9 +25,17 @@ export class Chat implements OnInit, OnDestroy {
   messages = signal<ChatMessage[]>([]);
   channelJoined = signal(false);
   errorMessage = signal('');
+  group = signal<any>(null);
+  channels = signal<any[]>([]);
+  newChannelName = '';
+  channelFormOpen = false;
+  channelFeedback = signal('');
+  private groupService = inject(Group);
+  private routeSubscription?: Subscription;
 
   private socketService = inject(SocketService);
   notification = signal('');
+  theme = signal('default');
   private notificationTimer?: ReturnType<typeof setTimeout>;
 
   constructor(
@@ -42,13 +52,77 @@ export class Chat implements OnInit, OnDestroy {
     }
 
     this.currentUser = JSON.parse(storedUser);
-    this.groupTitle = this.route.snapshot.paramMap.get('groupTitle') ?? '';
-    this.channelName = this.route.snapshot.paramMap.get('channelName') ?? '';
+    this.routeSubscription = this.route.paramMap.subscribe(params => {
+      this.groupTitle = params.get('groupTitle') || '';
+      this.channelName = params.get('channelName') || '';
+      this.channelFormOpen = false;
+      this.channelFeedback.set('');
+      this.newChannelName = '';
+      this.loadGroup();
+      this.openRoom();
+    });
+  }
 
-    if (!this.groupTitle || !this.channelName) {
-      this.router.navigate(['/dashboard']);
-      return;
-    }
+  loadGroup() {
+    const groupTitle = this.groupTitle;
+    this.group.set(null);
+    this.channels.set([]);
+    this.groupService.getGroup().subscribe({
+      next: groups => {
+        if (groupTitle !== this.groupTitle) return;
+        const group = groups.find(group => group.title === this.groupTitle);
+        if (!group || !group.members.includes(this.currentUser.username) ||
+            this.currentUser.age < group.minimumAge || (group.bannedMembers || []).includes(this.currentUser.username)) {
+          this.errorMessage.set('You do not have access to this group.');
+          return;
+        }
+        this.group.set(group);
+        if (!this.channelName) this.theme.set(group.theme || 'default');
+      },
+      error: error => this.errorMessage.set(error.error?.message || 'Group could not be loaded.'),
+    });
+    this.groupService.getChannels().subscribe({
+      next: channels => {
+        if (groupTitle === this.groupTitle) this.channels.set(channels.filter(channel => channel.groupTitle === groupTitle));
+      },
+      error: error => this.errorMessage.set(error.error?.message || 'Channels could not be loaded.'),
+    });
+  }
+
+  isGroupAdmin() {
+    return this.group()?.admins.includes(this.currentUser.username) || false;
+  }
+
+  saveChannel() {
+    const request = this.isGroupAdmin()
+      ? this.groupService.createChannel(this.newChannelName, this.groupTitle, this.currentUser.username)
+      : this.groupService.requestChannel({name: this.newChannelName, groupTitle: this.groupTitle, requestedBy: this.currentUser.username});
+    request.subscribe({
+      next: response => {
+        this.channelFeedback.set(response.message);
+        this.newChannelName = '';
+        this.loadGroup();
+      },
+      error: error => this.channelFeedback.set(error.error?.message || 'Channel could not be saved.'),
+    });
+  }
+
+  openChannel(name: string) {
+    this.router.navigate(['/chat', this.groupTitle, name]);
+  }
+
+  openRoom() {
+    this.socketService.disconnect();
+    clearTimeout(this.notificationTimer);
+    this.notification.set('');
+    this.messages.set([]);
+    this.channelJoined.set(false);
+    this.errorMessage.set('');
+    this.messageText = '';
+    this.removeImage();
+    this.sendingMessage.set(false);
+    this.readingImage.set(false);
+    if (!this.channelName) return;
 
     this.socketService.initSocket();
     this.socketService.onMessage(message => {
@@ -56,7 +130,8 @@ export class Chat implements OnInit, OnDestroy {
       this.errorMessage.set('');
     });
     this.socketService.onHistory(messages => this.messages.set(messages));
-    this.socketService.onJoined(() => {
+    this.socketService.onJoined(channel => {
+      this.theme.set(channel.theme);
       this.channelJoined.set(true);
       this.errorMessage.set('');
     });
@@ -72,6 +147,10 @@ export class Chat implements OnInit, OnDestroy {
     this.socketService.onDeleted(id => {
       this.messages.update(messages => messages.filter(message => message._id !== id));
     });
+    this.socketService.onUserDeleted(username => {
+      this.messages.update(messages => messages.filter(message => message.username !== username));
+    });
+    this.socketService.onThemeChanged(theme => this.theme.set(theme));
     this.socketService.onNotification(message => {
       this.notification.set(message);
       clearTimeout(this.notificationTimer);
@@ -83,6 +162,10 @@ export class Chat implements OnInit, OnDestroy {
       });
     });
     this.socketService.connect();
+  }
+
+  getThemeColor() {
+    return this.theme() === 'navy' ? '#101b2c' : this.theme() === 'plum' ? '#24172c' : '#24172f';
   }
 
   deleteMessage(message: ChatMessage) {
@@ -104,8 +187,10 @@ export class Chat implements OnInit, OnDestroy {
     }
     this.readingImage.set(true);
     this.errorMessage.set('');
+    const channelName = this.channelName;
     const reader = new FileReader();
     reader.onload = () => {
+      if (channelName !== this.channelName) return;
       this.messageImage.set(String(reader.result));
       this.readingImage.set(false);
     };
@@ -130,7 +215,9 @@ export class Chat implements OnInit, OnDestroy {
     }
 
     this.sendingMessage.set(true);
+    const channelName = this.channelName;
     this.socketService.sendMessage({text: this.messageText, image: this.messageImage()}, success => {
+      if (channelName !== this.channelName) return;
       this.sendingMessage.set(false);
       if (success) {
         this.messageText = '';
@@ -144,6 +231,7 @@ export class Chat implements OnInit, OnDestroy {
   }
 
   ngOnDestroy() {
+    this.routeSubscription?.unsubscribe();
     clearTimeout(this.notificationTimer);
     this.socketService.disconnect();
   }

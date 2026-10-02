@@ -4,9 +4,9 @@ import { Router, RouterLink } from '@angular/router';
 import { FormsModule } from '@angular/forms';
 import { Group } from '../../services/group';
 import { User } from '../../services/user';
+import { Administration } from '../administration/administration';
 import {
   ApiMessage,
-  ChannelRequestData,
   GroupRequestData,
   PendingChannelRequest,
   PendingGroupRequest,
@@ -14,7 +14,7 @@ import {
 } from '../../models/group.model';
 
 @Component({
-  imports: [FormsModule, RouterLink],
+  imports: [FormsModule, RouterLink, Administration],
   selector: 'app-dashboard',
   styleUrl: './dashboard.css',
   templateUrl: './dashboard.html',
@@ -63,8 +63,6 @@ export class Dashboard implements OnInit {
   groupDescription: string = '';
   minimumAge: number | null = null;
 
-  channelName: string = '';
-  selectedGroupTitle: string = '';
   adminChannelName: string = '';
   selectedAdminGroupTitle: string = '';
   groupSearch: string = '';
@@ -231,29 +229,6 @@ export class Dashboard implements OnInit {
     });
   }
 
-  requestChannel() {
-    const request: ChannelRequestData = {
-      name: this.channelName,
-      groupTitle: this.selectedGroupTitle,
-      requestedBy: this.currentuser.username
-    };
-
-    this.groupService.requestChannel(request).subscribe({
-      next: (response: ApiMessage) => {
-        this.showFeedback(response.message, 'success');
-
-        this.channelName = '';
-        this.selectedGroupTitle = '';
-        if (this.isGroupAdminOfAnyGroup()) {
-          this.loadChannelRequests();
-        }
-      },
-      error: (error: HttpErrorResponse) => {
-        this.showApiError(error, 'Channel request could not be sent.');
-      }
-    });
-  }
-
   createChannel() {
     this.groupService.createChannel(
       this.adminChannelName,
@@ -316,17 +291,6 @@ export class Dashboard implements OnInit {
     return this.getJoinedGroups().filter(group => !this.isGroupAdmin(group));
   }
 
-  openGeneralChat() {
-    const generalGroup = this.groups().find(group => group.title === 'Fabulari');
-
-    if (!generalGroup?.members.includes(this.currentuser.username)) {
-      this.showFeedback('Please log out and sign in again to refresh your account.', 'error');
-      return;
-    }
-
-    this.openChannel('Fabulari', 'general');
-  }
-
   getFilteredGroups() {
     const search = this.groupSearch.trim().toLowerCase();
 
@@ -350,14 +314,6 @@ export class Dashboard implements OnInit {
 
   isGroupAdminOfAnyGroup() {
     return this.getAdminGroups().length > 0;
-  }
-
-  isMemberOnly(group: any) {
-    return group.members.includes(this.currentuser.username) && !this.isGroupAdmin(group);
-  }
-
-  isMemberOnlyOfAnyGroup() {
-    return this.getMemberGroups().length > 0;
   }
 
   logout() {

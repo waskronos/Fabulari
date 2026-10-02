@@ -1,0 +1,200 @@
+<section class="admin-section">
+  <h2>{{ currentUser.role === 'superAdmin' ? 'Administrative tools' : 'Membership and moderation' }}</h2>
+  @if (feedback()) { <p class="feedback" role="alert">{{ feedback() }}</p> }
+
+  @if (currentUser.role === 'superAdmin') {
+    <details>
+      <summary>Create a group and assign an admin</summary>
+      <form (ngSubmit)="createGroup()">
+        <div class="form-grid">
+          <label for="directTitle">Title</label>
+          <input id="directTitle" name="directTitle" [(ngModel)]="title" required maxlength="30" />
+          <label for="directDescription">Description</label>
+          <textarea id="directDescription" name="directDescription" [(ngModel)]="newDescription" required maxlength="250"></textarea>
+          <label for="directAge">Minimum age</label>
+          <input id="directAge" name="directAge" type="number" min="0" [(ngModel)]="newMinimumAge" required />
+          <label for="assignedAdmin">Group Admin</label>
+          <select id="assignedAdmin" name="assignedAdmin" [(ngModel)]="assignedAdmin" required>
+            <option value="">Select an existing user</option>
+            @for (user of users(); track user._id) {
+              @if (user.role !== 'superAdmin') { <option [value]="user.username">{{ user.username }}</option> }
+            }
+          </select>
+        </div>
+        <button type="submit">Create group</button>
+      </form>
+    </details>
+
+    <details>
+      <summary>Delete a user account</summary>
+      <p>First appoint a successor in any group where the user is the only admin.</p>
+      <label for="deleteUsername">Account</label>
+      <select id="deleteUsername" [(ngModel)]="deleteUsername">
+        <option value="">Select a user</option>
+        @for (user of users(); track user._id) {
+          @if (user.role !== 'superAdmin') { <option [value]="user.username">{{ user.username }}</option> }
+        }
+      </select>
+      <button class="danger" (click)="deleteUser()" [disabled]="!deleteUsername">Delete account</button>
+    </details>
+  }
+
+  @if (manageableGroups().length) {
+    <details>
+      <summary>{{ currentUser.role === 'superAdmin' ? 'Assign group administrators' : 'Manage your groups' }}</summary>
+      <label for="manageGroup">Group</label>
+      <select id="manageGroup" [(ngModel)]="groupId" (ngModelChange)="selectGroup()">
+        <option value="">Select a group</option>
+        @for (group of manageableGroups(); track group._id) { <option [value]="group._id">{{ group.title }}</option> }
+      </select>
+      @if (selectedGroup(); as group) {
+        <p>Admins: {{ group.admins.join(', ') }}</p>
+        @if (currentUser.role !== 'superAdmin') {
+          <form (ngSubmit)="saveGroup()">
+            <div class="form-grid">
+              <label for="groupIcon">Group icon</label>
+              <div>
+                @if (icon) { <img class="group-icon" [src]="icon" alt="Selected group icon" /> }
+                <input id="groupIcon" type="file" accept="image/png,image/jpeg,image/gif" (change)="selectIcon($event)" />
+                <button type="button" (click)="icon = ''">Remove icon</button>
+              </div>
+              <label for="editDescription">Description</label>
+              <textarea id="editDescription" name="editDescription" [(ngModel)]="description" required maxlength="250"></textarea>
+              <label for="editAge">Minimum age</label>
+              <input id="editAge" name="editAge" type="number" min="0" [(ngModel)]="minimumAge" required />
+              <label for="groupTheme">Chat theme</label>
+              <select id="groupTheme" name="groupTheme" [(ngModel)]="theme">
+                <option value="default">Default dark</option><option value="navy">Navy</option><option value="plum">Plum</option>
+              </select>
+            </div>
+            <button type="submit">Save group details</button>
+          </form>
+          <h3>Pending membership requests</h3>
+          @for (username of group.joinRequests; track username) {
+            <div class="row"><span>{{ username }}</span><button (click)="rejectJoin(username)">Reject request</button></div>
+          } @empty { <p>No pending requests. Approvals are in your group card above.</p> }
+        }
+        <h3>Members and administrators</h3>
+        <label for="manageMember">Member</label>
+        <select id="manageMember" [(ngModel)]="member">
+          <option value="">Select a member</option>
+          @for (username of group.members; track username) { <option [value]="username">{{ username }}{{ group.admins.includes(username) ? ' (admin)' : '' }}</option> }
+          @for (username of group.bannedMembers || []; track username) { <option [value]="username">{{ username }} (banned)</option> }
+        </select>
+        @if (group.members.includes(member)) {
+          <div class="buttons">
+            @if (!group.admins.includes(member)) { <button (click)="manageMember('promote')">Make admin</button> }
+            @else { <button (click)="manageMember('demote')">Remove admin role</button> }
+            @if (currentUser.role !== 'superAdmin') { <button (click)="manageMember('remove')">Remove member</button> }
+          </div>
+          @if (currentUser.role !== 'superAdmin') {
+            <label for="banReason">Ban reason</label>
+            <input id="banReason" [(ngModel)]="reason" maxlength="250" placeholder="Explain why the member should be banned" />
+            <button class="danger" (click)="manageMember('ban')" [disabled]="!reason.trim()">Ban from group</button>
+          }
+        } @else if (member && (group.bannedMembers || []).includes(member) && currentUser.role !== 'superAdmin') {
+          <button (click)="manageMember('unban')">Lift ban (user must request to rejoin)</button>
+        }
+        @if (currentUser.role !== 'superAdmin') {
+          <h3>Channels</h3>
+          @for (channel of channels; track channel._id) {
+            @if (channel.groupTitle === group.title) {
+              <div class="row"><span># {{ channel.name }}</span><button class="danger" (click)="deleteChannel(channel)">Delete channel</button></div>
+            }
+          }
+          <button class="danger" (click)="deleteGroup()">Delete group and channels</button>
+        }
+      }
+    </details>
+  }
+
+  @if (currentUser.role !== 'superAdmin') {
+    <details>
+      <summary>Report a member or request account deletion</summary>
+      <p>Reports go to the Group Admin. Account deletion requests can only be sent by a Group Admin.</p>
+      <form (ngSubmit)="sendReport()">
+        <div class="form-grid">
+          <label for="reportGroup">Group</label>
+          <select id="reportGroup" name="reportGroup" [(ngModel)]="reportGroupId" (ngModelChange)="reportUsername = ''; reportType = 'ban'" required>
+            <option value="">Select a group</option>
+            @for (group of joinedGroups(); track group._id) { <option [value]="group._id">{{ group.title }}</option> }
+          </select>
+          @if (reportGroup(); as group) {
+            <label for="reportUser">User</label>
+            <select id="reportUser" name="reportUser" [(ngModel)]="reportUsername" required>
+              <option value="">Select another member</option>
+              @for (username of group.members; track username) {
+                @if (username !== currentUser.username) { <option [value]="username">{{ username }}</option> }
+              }
+              @if (group.admins.includes(currentUser.username)) {
+                @for (username of group.bannedMembers || []; track username) { <option [value]="username">{{ username }} (banned)</option> }
+              }
+            </select>
+            <label for="reportType">Request</label>
+            <select id="reportType" name="reportType" [(ngModel)]="reportType">
+              <option value="ban">Ban from this group</option>
+              @if (group.admins.includes(currentUser.username)) { <option value="deleteUser">Delete account (Super Admin review)</option> }
+            </select>
+          }
+          <label for="reportReason">Reason</label>
+          <textarea id="reportReason" name="reportReason" [(ngModel)]="reportReason" required maxlength="250"></textarea>
+        </div>
+        <button type="submit">Send moderation request</button>
+      </form>
+    </details>
+    <details>
+      <summary>Leave a group</summary>
+      <p>If you are its only admin, appoint another admin first.</p>
+      <label for="leaveGroup">Group</label>
+      <select id="leaveGroup" [(ngModel)]="leaveGroupId">
+        <option value="">Select a group</option>
+        @for (group of joinedGroups(); track group._id) { <option [value]="group._id">{{ group.title }}</option> }
+      </select>
+      <button (click)="leaveGroup()" [disabled]="!leaveGroupId">Leave group</button>
+    </details>
+  }
+
+  <details>
+    <summary>{{ manageableGroups().length || currentUser.role === 'superAdmin' ? 'Membership requests, moderation and decisions' : 'Your requests and decisions' }} ({{ requests().length }})</summary>
+    <p>Members see their own requests. Only the responsible administrator can approve or reject them.</p>
+    <button (click)="loadRequests()">Refresh requests</button>
+    @for (request of requests(); track request._id) {
+      <article class="request">
+        <strong>{{ request.type === 'membership' ? 'Membership: ' + request.targetUsername : request.type === 'channel' ? 'Channel: #' + request.name : request.type === 'ban' ? 'Group ban: ' + request.targetUsername : 'Account deletion: ' + request.targetUsername }}</strong>
+        <p>{{ request.groupTitle }} · requested by {{ request.requestedBy }}</p>
+        <p>{{ request.reason }}</p>
+        <span class="badge">{{ request.status }}</span>
+        @if (request.reviewedBy) { <small>Reviewed by {{ request.reviewedBy }}</small> }
+        @if (request.reviewReason) { <p>{{ request.reviewReason }}</p> }
+        @if (canReview(request)) {
+          <div class="buttons"><button (click)="reviewRequest(request, 'approve')">Approve</button><button (click)="reviewRequest(request, 'reject')">Reject</button></div>
+        }
+      </article>
+    } @empty { <p>No moderation requests.</p> }
+  </details>
+
+  @if (currentUser.role === 'superAdmin') {
+    <details>
+      <summary>Audit logs ({{ logs().length }})</summary>
+      <form (ngSubmit)="loadLogs()">
+        <div class="form-grid">
+          <label for="logActor">Performed by</label><input id="logActor" name="logActor" [(ngModel)]="logActor" placeholder="Username (optional)" />
+          <label for="logAction">Action</label>
+          <select id="logAction" name="logAction" [(ngModel)]="logAction"><option value="">All actions</option>
+            @for (action of logActions; track action) { <option [value]="action">{{ action }}</option> }
+          </select>
+          <label for="logFrom">From</label><input id="logFrom" name="logFrom" type="date" [(ngModel)]="logFrom" />
+          <label for="logTo">To</label><input id="logTo" name="logTo" type="date" [(ngModel)]="logTo" />
+        </div>
+        <button type="submit">Filter logs</button>
+      </form>
+      <p>Latest 200 matching events. Passwords and chat contents are not logged.</p>
+      @for (log of logs(); track log._id) {
+        <article class="request"><strong>{{ log.action }}</strong><p>{{ log.actor }} · {{ log.target }}</p>
+          @if (log.reason) { <p>{{ log.reason }}</p> }
+          <small>{{ log.timestamp | date:'medium' }}</small>
+        </article>
+      } @empty { <p>No matching events.</p> }
+    </details>
+  }
+</section>

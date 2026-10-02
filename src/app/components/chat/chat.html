@@ -1,8 +1,32 @@
-<main class="chat-page">
+<div class="chat-shell">
+  <aside class="channel-sidebar">
+    @if (group(); as group) {
+      <div class="group-heading">
+        @if (group.icon) { <img class="group-icon" [src]="group.icon" [alt]="group.title + ' icon'" /> }
+        @else { <span class="group-icon">{{ group.title[0].toUpperCase() }}</span> }
+        <h2>{{ group.title }}</h2>
+      </div>
+      <p>Channels</p>
+      @for (channel of channels(); track channel._id) {
+        <button class="channel-link" [class.active-channel]="channel.name === channelName" (click)="openChannel(channel.name)"># {{ channel.name }}</button>
+      } @empty { <p>No channels yet.</p> }
+      @if (group.members.includes(currentUser.username)) {
+        <button class="channel-action" (click)="channelFormOpen = !channelFormOpen">{{ isGroupAdmin() ? 'Create a channel' : 'Request a channel' }}</button>
+      }
+      @if (channelFormOpen) {
+        <form class="channel-request" (ngSubmit)="saveChannel()">
+          <label for="newChannelName">Channel name</label>
+          <input id="newChannelName" name="newChannelName" [(ngModel)]="newChannelName" required maxlength="30" />
+          <button type="submit">{{ isGroupAdmin() ? 'Create channel' : 'Send request' }}</button>
+        </form>
+      }
+      @if (channelFeedback()) { <p class="alert" role="alert">{{ channelFeedback() }}</p> }
+    }
+  </aside>
+<main class="chat-page" [style.background-color]="getThemeColor()">
   <header class="chat-header">
     <div>
-      <p>{{ groupTitle }}</p>
-      <h1># {{ channelName }}</h1>
+      <h1>{{ channelName ? '# ' + channelName : 'Select a channel' }}</h1>
     </div>
     <button type="button" (click)="backToDashboard()">Back to dashboard</button>
   </header>
@@ -66,7 +90,10 @@
         <button type="submit" [disabled]="sendingMessage() || readingImage()">{{ sendingMessage() ? 'Sending...' : 'Send' }}</button>
       </div>
     </form>
+  } @else if (!channelName) {
+    <p class="empty-message">Choose a channel on the left, or {{ isGroupAdmin() ? 'create' : 'request' }} a new one.</p>
   } @else if (!errorMessage()) {
     <p class="empty-message">Opening channel...</p>
   }
 </main>
+</div>

@@ -1,0 +1,19 @@
+:host { display: block; }
+.admin-section { padding: 24px; margin-top: 24px; background: #1b1d26; border: 1px solid #343641; border-radius: 12px; }
+h2 { margin-top: 0; color: #ff9cab; }
+p, small { color: #b7bac6; overflow-wrap: anywhere; }
+details { padding: 16px 0; border-top: 1px solid #343641; }
+summary { cursor: pointer; font-weight: 600; padding-bottom: 8px; }
+.form-grid { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 12px; align-items: center; margin: 16px 0; }
+input, textarea, select { padding: 10px; border: 1px solid #4a4c58; border-radius: 6px; background: #11131a; color: white; font: inherit; max-width: 100%; box-sizing: border-box; }
+textarea { min-height: 70px; resize: vertical; }
+button { padding: 9px 14px; border: none; border-radius: 6px; background: #edab70; color: #211810; cursor: pointer; margin: 8px 6px 8px 0; }
+button:disabled { opacity: 0.5; cursor: default; }
+.danger { background: #542b33; color: #ffd6dd; }
+.group-icon { display: block; width: 64px; height: 64px; object-fit: cover; border-radius: 12px; margin-bottom: 10px; }
+.row, .buttons { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.row { justify-content: space-between; }
+.request { margin-top: 14px; padding: 16px; border: 1px solid #424451; border-radius: 8px; }
+.badge { padding: 4px 8px; background: #38333d; border-radius: 4px; margin-right: 10px; }
+.feedback { padding: 12px; border: 1px solid #b7865b; border-radius: 8px; background: #32291f; color: #ffe5cc; }
+@media (max-width: 650px) { .admin-section { padding: 16px; } .form-grid { grid-template-columns: 1fr; } }

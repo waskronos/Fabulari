@@ -1,59 +1,46 @@
 # Fabulari
 
-This project was generated using [Angular CLI](https://github.com/angular/angular-cli) version 22.1.5.
+University group-chat project using Angular, Node/Express, Socket.IO and the official MongoDB Node driver. [Phase2.md](Phase2.md) explains features, data, API/socket events and verified tests.
 
-## Development server
+## Run locally
 
-To start a local development server, run:
+Install Node.js/npm and start MongoDB locally on port 27017. From this folder:
 
-```bash
-ng serve
+```powershell
+npm install
+Copy-Item .env.example .env
+npm run server
 ```
 
-Once the server is running, open your browser and navigate to `http://localhost:4200/`. The application will automatically reload whenever you modify any of the source files.
+Only copy the environment file if `.env` does not already exist. In another terminal:
 
-## Code scaffolding
-
-Angular CLI includes powerful code scaffolding tools. To generate a new component, run:
-
-```bash
-ng generate component component-name
+```powershell
+npm start
 ```
 
-For a complete list of available schematics (such as `components`, `directives`, or `pipes`), run:
+Open `http://localhost:4200`. The backend uses port 3000 and database `fabulari` by default. The first account registered in an empty database becomes Super Admin. Accounts are not automatically seeded. MongoDB collections and `.env` are not committed to Git.
 
-```bash
-ng generate --help
+## Test
+
+```powershell
+npm test -- --watch=false
+npm run test:unit
+npm run build
 ```
 
-## Building
+Keep MongoDB running and start a separate backend terminal:
 
-To build the project run:
-
-```bash
-ng build
+```powershell
+npm run server:test
 ```
 
-This will compile your project and store the build artifacts in the `dist/` directory. By default, the production build optimizes your application for performance and speed.
+This uses port 3002 and disposable database `fabulari_test`. Tests reset its collections, so never use it for presentation data. Run these suites sequentially:
 
-## Running unit tests
-
-To execute unit tests with the [Vitest](https://vitest.dev/) test runner, use the following command:
-
-```bash
-ng test
+```powershell
+npm run test:api
+npm run test:e2e
 ```
 
-## Running end-to-end tests
+Cypress needs Angular running on port 4200. Run `npx cypress install` once if its browser binary is missing. `npm run test:e2e:open` opens the interactive runner.
 
-For end-to-end (e2e) testing, run:
-
-```bash
-ng e2e
-```
-
-Angular CLI does not come with an end-to-end testing framework by default. You can choose one that suits your needs.
-
-## Additional Resources
-
-For more information on using the Angular CLI, including detailed command references, visit the [Angular CLI Overview and Command Reference](https://angular.dev/tools/cli) page.
+Angular tests use TestBed/Vitest, backend tests use Mocha/assert/Chai/chai-http and browser tests use Cypress. Socket integration tests exercise real rooms against the separate test server.

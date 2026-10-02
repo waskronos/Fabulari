@@ -3,11 +3,12 @@ nav {
   align-items: center;
   gap: 20px;
   padding: 14px 24px;
-  background-color: #252525;
+  background-color: #130e1c;
+  font-family: Arial, sans-serif;
 }
 
 nav a {
-  color: white;
+  color: #e8d9f7;
   text-decoration: none;
 }
 
@@ -16,7 +17,14 @@ nav a:hover {
 }
 
 .brand {
+  color: #eac2f8;
   font-size: 22px;
   font-weight: bold;
   margin-right: auto;
 }
+
+.menu-button { padding: 5px 10px; border: 1px solid #493653; border-radius: 6px; background: #281d35; color: #eac2f8; font-size: 22px; cursor: pointer; }
+.menu-backdrop { position: fixed; inset: 64px 0 0; border: 0; background: #0006; z-index: 20; }
+.account-menu { position: fixed; top: 64px; bottom: 0; left: 0; width: 240px; padding: 24px; box-sizing: border-box; background: #1b1427; color: #f4e8fa; z-index: 21; font-family: Arial, sans-serif; }
+.account-menu p { color: #b9a8c7; }
+.account-menu a { display: block; margin-top: 12px; padding: 12px; border-radius: 8px; background: #2c203c; color: #eed9fa; text-decoration: none; }

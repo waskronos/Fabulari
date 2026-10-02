@@ -8,6 +8,12 @@ import { RouterLink, RouterOutlet } from '@angular/router';
   templateUrl: './app.html',
 })
 export class App {
+  menuOpen = false;
+
+  currentUser() {
+    return JSON.parse(localStorage.getItem('currentUser') || 'null');
+  }
+
   isLoggedIn() {
     return !!localStorage.getItem('currentUser');
   }

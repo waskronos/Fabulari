@@ -1,4 +1,7 @@
 <nav>
+  @if (isLoggedIn()) {
+    <button class="menu-button" type="button" (click)="menuOpen = !menuOpen" [attr.aria-expanded]="menuOpen" aria-controls="account-menu" aria-label="Toggle navigation">☰</button>
+  }
   <a class="brand" [routerLink]="isLoggedIn() ? '/home' : '/'">Fabulari</a>
 
   <a [routerLink]="isLoggedIn() ? '/home' : '/'">Home</a>
@@ -9,5 +12,17 @@
     <a routerLink="/register">Register</a>
   }
 </nav>
+
+@if (isLoggedIn() && menuOpen) {
+  <button class="menu-backdrop" type="button" (click)="menuOpen = false" aria-label="Close navigation"></button>
+  <aside id="account-menu" class="account-menu">
+    @if (currentUser(); as user) {
+      <strong>{{ user.firstName }} {{ user.lastName }}</strong>
+      <p>&#64;{{ user.username }}</p>
+    }
+    <a routerLink="/home" (click)="menuOpen = false">Home</a>
+    <a routerLink="/dashboard" (click)="menuOpen = false">Profile dashboard</a>
+  </aside>
+}
 
 <router-outlet></router-outlet>

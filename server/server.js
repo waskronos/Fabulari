@@ -1,23 +1,24 @@
 import express from 'express';
 import cors from 'cors';
-import { randomUUID } from 'crypto';
+import { ObjectId } from 'mongodb';
 import bcrypt from 'bcryptjs';
 import 'dotenv/config';
 import { createServer } from 'http';
 import { Server } from 'socket.io';
 import {
-    checkDatabaseHealth,
     connectDB,
     ensureGeneralChat,
     getDB,
-    seedDatabase,
 } from './db.js';
 import connectSockets from './sockets.js';
+import { calculateAge, createSession, endSession, getSessionUser } from './access.js';
+import { isValidImage } from './images.js';
 
 const app = express();
 const port = Number(process.env.HTTP_PORT) || 3000;
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
+    maxHttpBufferSize: 3 * 1024 * 1024,
     cors: {
         origin: 'http://localhost:4200',
         methods: ['GET', 'POST'],
@@ -26,26 +27,43 @@ const io = new Server(httpServer, {
 
 connectSockets(io);
 
-function calculateAge(dateOfBirth) {
-    const today = new Date();
-    const birthDate = new Date(`${dateOfBirth}T00:00:00`);
-    let age = today.getFullYear() - birthDate.getFullYear();
-    const birthdayHasPassed =
-        today.getMonth() > birthDate.getMonth() ||
-        (today.getMonth() === birthDate.getMonth() && today.getDate() >= birthDate.getDate());
-
-    if (!birthdayHasPassed) {
-        age--;
-    }
-
-    return age;
-}
-
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '3mb' }));
+
+// Check the login before checking permissions on individual routes.
+app.use('/api', async (req, res, next) => {
+    if (req.method === 'POST' && ['/login', '/users'].includes(req.path)) return next();
+    try {
+        const token = req.headers.authorization?.replace(/^Bearer /, '');
+        const user = await getSessionUser(token);
+        if (!user) return res.status(401).json({message: 'Please sign in again'});
+        req.user = user;
+        req.sessionToken = token;
+        const actors = [req.body?.requestedBy, req.body?.reviewedBy, req.body?.createdBy, req.query.username];
+        if (req.path === '/groups/join') actors.push(req.body?.username);
+        if (actors.some(actor => actor !== undefined && actor !== user.username)) {
+            return res.status(403).json({message: 'You cannot act as another user'});
+        }
+        return next();
+    } catch (error) {
+        return res.status(500).json({message: 'Login could not be checked'});
+    }
+});
+
+app.post('/api/logout', (req, res) => {
+    endSession(req.sessionToken);
+    for (const socket of io.sockets.sockets.values()) {
+        if (socket.handshake.auth.token === req.sessionToken) socket.disconnect(true);
+    }
+    res.json({message: 'Logged out'});
+});
 
 app.post('/api/users', async (req, res) => {
-    const newUser = req.body;
+    const {username, firstName, lastName, email, dateOfBirth, password} = req.body;
+    const newUser = {username, firstName, lastName, email, dateOfBirth, password};
+    if (!Object.values(newUser).every(value => typeof value === 'string')) {
+        return res.status(400).json({message: 'Please enter valid registration details'});
+    }
     if (!newUser.username ||
          !newUser.firstName ||
           !newUser.lastName ||
@@ -75,7 +93,7 @@ app.post('/api/users', async (req, res) => {
     }
 
     try {
-        const users = await getDB().collection('users').find().toArray();
+        const users = getDB().collection('users');
         newUser.email = newUser.email.trim().toLowerCase();
         newUser.username = newUser.username.trim();
         newUser.firstName = newUser.firstName.trim();
@@ -87,10 +105,8 @@ app.post('/api/users', async (req, res) => {
            !newUser.email){
             return res.status(400).json({message: 'All fields are mandatory!'})};
 
-        const emailExists = users.some(user => user.email === newUser.email);
-        const usernameExists = users.some(
-            user => user.username.toLowerCase() === newUser.username.toLowerCase()
-        );
+        const emailExists = await users.findOne({email: newUser.email});
+        const usernameExists = await users.findOne({username: newUser.username}, {collation: {locale: 'en', strength: 2}});
 
         if(emailExists){
             return res.status(400).json({message: 'Email already exists'});
@@ -99,7 +115,7 @@ app.post('/api/users', async (req, res) => {
             return res.status(400).json({message: 'Username already exists'});
         }
 
-        if (users.length === 0)
+        if (await users.countDocuments() === 0)
             { newUser.role = 'superAdmin';
              } else{
                 newUser.role = 'user';
@@ -121,19 +137,22 @@ app.post('/api/users', async (req, res) => {
         console.error('Error creating user:', error);
         return res.status(500).json({message: 'Failed to save user data'});
     }
+    if (Buffer.byteLength(newUser.password) > 72) {
+        return res.status(400).json({message: 'Password cannot exceed 72 bytes'});
+    }
 });
 
 app.post('/api/login', async (req, res) => {
     const loginData = req.body;
 
-    if (!loginData.username || !loginData.password) {
+    if (typeof loginData.username !== 'string' || typeof loginData.password !== 'string' ||
+        !loginData.username.trim() || !loginData.password) {
         return res.status(400).json({ message: 'Please fill both fields' });
     }
 
     try {
-        const users = await getDB().collection('users').find().toArray();
-        const user = users.find(
-            item => item.username.toLowerCase() === loginData.username.toLowerCase()
+        const user = await getDB().collection('users').findOne(
+            {username: loginData.username.trim()}, {collation: {locale: 'en', strength: 2}}
         );
 
         if (!user) {
@@ -162,6 +181,8 @@ app.post('/api/login', async (req, res) => {
                 dateOfBirth: user.dateOfBirth,
                 age: user.dateOfBirth ? calculateAge(user.dateOfBirth) : user.age,
                 role: user.role,
+                profileImage: user.profileImage || '',
+                sessionToken: createSession(user.username),
             },
         });
     } catch (error) {
@@ -172,7 +193,14 @@ app.post('/api/login', async (req, res) => {
 
 
 app.patch('/api/users/:username', async (req, res) => {
+    if (req.params.username !== req.user.username) {
+        return res.status(403).json({message: 'You can only update your own profile'});
+    }
     const { firstName, lastName, email, dateOfBirth, currentPassword } = req.body;
+    const profileImage = req.body.profileImage ?? req.user.profileImage ?? '';
+    if (!isValidImage(profileImage)) {
+        return res.status(400).json({message: 'Use a PNG, JPEG or GIF image up to 2 MB'});
+    }
     if (![firstName, lastName, email, dateOfBirth, currentPassword]
         .every(value => typeof value === 'string' && value.trim())) {
         return res.status(400).json({message: 'All profile fields and your current password are required'});
@@ -198,13 +226,10 @@ app.patch('/api/users/:username', async (req, res) => {
         const users = getDB().collection('users');
         const user = await users.findOne({username: req.params.username});
         if (!user || !await bcrypt.compare(currentPassword, user.password)) {
-            return res.status(401).json({message: 'Your current password is incorrect'});
+            return res.status(403).json({message: 'Your current password is incorrect'});
         }
-        const duplicateEmail = await users.findOne({
-            email: cleanEmail, _id: { $ne: user._id },
-        });
-        if (duplicateEmail) {
-            return res.status(400).json({message: 'Email already exists'});
+        if (cleanEmail !== user.email) {
+            return res.status(400).json({message: 'Your email cannot be changed'});
         }
 
         const profile = {
@@ -212,8 +237,14 @@ app.patch('/api/users/:username', async (req, res) => {
             lastName: lastName.trim(),
             email: cleanEmail,
             dateOfBirth,
+            profileImage,
         };
         await users.updateOne({ _id: user._id }, { $set: profile });
+        if (dateOfBirth !== user.dateOfBirth) {
+            for (const socket of io.sockets.sockets.values()) {
+                if (socket.data.channel?.username === user.username) socket.disconnect(true);
+            }
+        }
         return res.json({
             message: 'Profile updated successfully',
             user: {
@@ -221,11 +252,43 @@ app.patch('/api/users/:username', async (req, res) => {
                 ...profile,
                 age: calculateAge(dateOfBirth),
                 role: user.role,
+                sessionToken: req.sessionToken,
             },
         });
     } catch (error) {
         console.error('Error updating profile:', error);
         return res.status(500).json({message: 'Profile could not be saved'});
+    }
+});
+
+// Change only the logged-in user's password after checking their current one.
+app.patch('/api/users/:username/password', async (req, res) => {
+    if (req.params.username !== req.user.username) {
+        return res.status(403).json({message: 'You can only change your own password'});
+    }
+    const {currentPassword, newPassword, confirmPassword} = req.body;
+    if (![currentPassword, newPassword, confirmPassword].every(value => typeof value === 'string' && value)) {
+        return res.status(400).json({message: 'Please fill all password fields'});
+    }
+    if (newPassword !== confirmPassword) {
+        return res.status(400).json({message: 'New passwords do not match'});
+    }
+    if (newPassword.length < 8 || newPassword.length > 72 || !/[A-Z]/.test(newPassword) ||
+        Buffer.byteLength(newPassword) > 72) {
+        return res.status(400).json({message: 'Use 8–72 characters with at least one uppercase letter (maximum 72 bytes)'});
+    }
+    if (newPassword === currentPassword) {
+        return res.status(400).json({message: 'Choose a different new password'});
+    }
+    try {
+        if (!await bcrypt.compare(currentPassword, req.user.password)) {
+            return res.status(403).json({message: 'Your current password is incorrect'});
+        }
+        const password = await bcrypt.hash(newPassword, 10);
+        await getDB().collection('users').updateOne({_id: req.user._id}, {$set: {password}});
+        return res.json({message: 'Password updated successfully'});
+    } catch {
+        return res.status(500).json({message: 'Password could not be changed'});
     }
 });
 
@@ -262,13 +325,9 @@ app.post('/api/group-requests', async (req, res) => {
     }
 
     try {
-        const [users, groups, requests] = await Promise.all([
-            getDB().collection('users').find().toArray(),
-            getDB().collection('groups').find().toArray(),
-            getDB().collection('requests').find().toArray(),
-        ]);
-        const requester = users.find(
-            user => user.username.toLowerCase() === requestedBy.trim().toLowerCase()
+        const requester = req.user;
+        const groupExists = await getDB().collection('groups').findOne(
+            {title: cleanTitle}, {collation: {locale: 'en', strength: 2}}
         );
 
         if (!requester) {
@@ -277,21 +336,23 @@ app.post('/api/group-requests', async (req, res) => {
         if (requester.role === 'superAdmin') {
             return res.status(400).json({message: 'Super Admin cannot request a group'});
         }
-        if (groups.some(group => group.title.toLowerCase() === cleanTitle.toLowerCase())) {
+        const age = requester.dateOfBirth ? calculateAge(requester.dateOfBirth) : requester.age;
+        if (!Number.isFinite(age) || age < numericMinimumAge) {
+            return res.status(400).json({message: 'You must meet your requested group\'s minimum age'});
+        }
+        if (groupExists) {
             return res.status(400).json({message: 'Group title already exists'});
         }
 
-        const duplicateRequest = requests.some(request =>
-            request.type === 'group' &&
-            request.status === 'pending' &&
-            request.title.toLowerCase() === cleanTitle.toLowerCase()
+        const duplicateRequest = await getDB().collection('requests').findOne(
+            {type: 'group', status: 'pending', title: cleanTitle},
+            {collation: {locale: 'en', strength: 2}}
         );
         if (duplicateRequest) {
             return res.status(400).json({message: 'A request for this group title is already pending'});
         }
 
         await getDB().collection('requests').insertOne({
-            id: randomUUID(),
             type: 'group',
             title: cleanTitle,
             description: cleanDescription,
@@ -312,24 +373,16 @@ app.get('/api/group-requests', async (req, res) => {
     const username = String(req.query.username ?? '').trim();
 
     try {
-        const [users, requests] = await Promise.all([
-            getDB().collection('users').find().toArray(),
-            getDB().collection('requests').find().toArray(),
-        ]);
-        const currentUser = users.find(
-            user => user.username.toLowerCase() === username.toLowerCase()
-        );
+        const currentUser = req.user;
 
         if (!currentUser) {
             return res.status(404).json({message: 'User not found'});
         }
 
-        return res.status(200).json(
-            requests.filter(request => request.type === 'group' &&
-                (currentUser.role === 'superAdmin'
-                    ? request.status === 'pending'
-                    : request.requestedBy === currentUser.username))
-        );
+        const filter = currentUser.role === 'superAdmin'
+            ? {type: 'group', status: 'pending'}
+            : {type: 'group', requestedBy: currentUser.username};
+        return res.status(200).json(await getDB().collection('requests').find(filter).toArray());
     } catch (error) {
         console.error('Error loading group requests:', error);
         return res.status(500).json({message: 'Failed to load group requests'});
@@ -344,30 +397,29 @@ app.patch('/api/group-requests/:requestId', async (req, res) => {
     }
 
     try {
-        const [users, groups, requests] = await Promise.all([
-            getDB().collection('users').find().toArray(),
-            getDB().collection('groups').find().toArray(),
-            getDB().collection('requests').find().toArray(),
-        ]);
-        const reviewer = users.find(
-            user => user.username.toLowerCase() === String(reviewedBy ?? '').trim().toLowerCase()
-        );
+        const reviewer = req.user;
 
         if (!reviewer || reviewer.role !== 'superAdmin') {
             return res.status(403).json({message: 'Only the Super Admin can review group requests'});
         }
 
-        const request = requests.find(item => item.id === req.params.requestId);
+        if (!/^[a-f0-9]{24}$/.test(req.params.requestId)) {
+            return res.status(400).json({message: 'Invalid request ID'});
+        }
+        const request = await getDB().collection('requests').findOne({_id: new ObjectId(req.params.requestId)});
         if (!request || request.type !== 'group' || request.status !== 'pending') {
             return res.status(404).json({message: 'Pending group request not found'});
         }
 
         if (action === 'approve') {
-            if (groups.some(group => group.title.toLowerCase() === request.title.toLowerCase())) {
+            const existingGroup = await getDB().collection('groups').findOne(
+                {title: request.title}, {collation: {locale: 'en', strength: 2}}
+            );
+            if (existingGroup) {
                 return res.status(400).json({message: 'Group title already exists'});
             }
 
-            const requester = users.find(user => user.username === request.requestedBy);
+            const requester = await getDB().collection('users').findOne({username: request.requestedBy});
             if (!requester) {
                 return res.status(404).json({message: 'Requesting user no longer exists'});
             }
@@ -383,7 +435,7 @@ app.patch('/api/group-requests/:requestId', async (req, res) => {
         }
 
         await getDB().collection('requests').updateOne(
-            { id: request.id },
+            { _id: request._id },
             {
                 $set: {
                     status: action === 'approve' ? 'approved' : 'rejected',
@@ -404,24 +456,22 @@ app.patch('/api/group-requests/:requestId', async (req, res) => {
 
 app.post('/api/groups/join', async (req, res) => {
     const joinData = req.body;
-    if(!joinData.title || !joinData.username) {
+    if(typeof joinData.title !== 'string' || typeof joinData.username !== 'string' ||
+        !joinData.title.trim() || !joinData.username.trim()) {
         return res.status(400).json({message: 'Group title and username are required'});
     }  
 
     try {
-        const [users, groups] = await Promise.all([
-            getDB().collection('users').find().toArray(),
-            getDB().collection('groups').find().toArray(),
-        ]);
-        const userFound = users.find(
-            user => user.username.toLowerCase() === joinData.username.toLowerCase()
-        );
+        const userFound = req.user;
         if(!userFound) {
             return res.status(404).json({message: 'User not found'});
         }
+        if (userFound.role === 'superAdmin') {
+            return res.status(403).json({message: 'Super Admin cannot join groups'});
+        }
 
-        const groupFound = groups.find(
-            group => group.title.toLowerCase() === joinData.title.toLowerCase()
+        const groupFound = await getDB().collection('groups').findOne(
+            {title: joinData.title}, {collation: {locale: 'en', strength: 2}}
         );
         if(!groupFound) {
                 return res.status(404).json({message: 'Group not found'});
@@ -431,7 +481,7 @@ app.post('/api/groups/join', async (req, res) => {
             ? calculateAge(userFound.dateOfBirth)
             : userFound.age;
 
-        if(userAge < groupFound.minimumAge){
+        if(!Number.isFinite(userAge) || userAge < groupFound.minimumAge){
             return res.status(400).json({message: 'User does not meet the minimum age requirement for this group'});
         }
 
@@ -445,7 +495,7 @@ app.post('/api/groups/join', async (req, res) => {
 
         await getDB().collection('groups').updateOne(
             { _id: groupFound._id },
-            { $push: { joinRequests: userFound.username } }
+            { $addToSet: { joinRequests: userFound.username } }
         );
         return res.status(200).json({message: 'Join request sent successfully'});
     } catch (error) {
@@ -458,18 +508,27 @@ app.post('/api/groups/join', async (req, res) => {
 app.post('/api/groups/approve', async (req, res) => {
     const approvalData = req.body;
 
-    if(!approvalData.title || !approvalData.username){
+    if(typeof approvalData.title !== 'string' || typeof approvalData.username !== 'string' ||
+        !approvalData.title.trim() || !approvalData.username.trim()){
         return res.status(400).json({message: 'Group title and username are required'});
     }
 
     try {
-        const groups = await getDB().collection('groups').find().toArray();
-        const groupFound = groups.find(
-            group => group.title.toLowerCase() === approvalData.title.toLowerCase()
+        const groupFound = await getDB().collection('groups').findOne(
+            {title: approvalData.title}, {collation: {locale: 'en', strength: 2}}
         );
 
         if(!groupFound){
             return res.status(404).json({message: 'Group not found'});
+        }
+
+        if (req.user.role === 'superAdmin' || !groupFound.admins.includes(req.user.username)) {
+            return res.status(403).json({message: 'Only this group admin can approve members'});
+        }
+        const applicant = await getDB().collection('users').findOne({username: approvalData.username});
+        const age = applicant?.dateOfBirth ? calculateAge(applicant.dateOfBirth) : applicant?.age;
+        if (!applicant || applicant.role === 'superAdmin' || !Number.isFinite(age) || age < groupFound.minimumAge) {
+            return res.status(400).json({message: 'User does not meet this group\'s requirements'});
         }
 
         const requestIndex = groupFound.joinRequests.indexOf(approvalData.username);
@@ -500,29 +559,23 @@ app.post('/api/channels', async (req, res) => {
     }
 
     try {
-        const [groups, channels] = await Promise.all([
-            getDB().collection('groups').find().toArray(),
-            getDB().collection('channels').find().toArray(),
-        ]);
-        const groupFound = groups.find(
-            group => group.title.toLowerCase() === groupTitle.trim().toLowerCase()
+        const groupFound = await getDB().collection('groups').findOne(
+            {title: groupTitle.trim()}, {collation: {locale: 'en', strength: 2}}
         );
 
         if (!groupFound) {
             return res.status(404).json({message: 'Group not found'});
         }
 
-        const groupAdmin = groupFound.admins.find(
-            admin => admin.toLowerCase() === createdBy.trim().toLowerCase()
-        );
+        const groupAdmin = req.user.role !== 'superAdmin' && groupFound.admins.includes(req.user.username)
+            ? req.user.username : null;
         if (!groupAdmin) {
             return res.status(403).json({message: 'Only this group\'s admins can create channels'});
         }
 
         const cleanName = name.trim();
-        const channelExists = channels.some(channel =>
-            channel.name.toLowerCase() === cleanName.toLowerCase() &&
-            channel.groupTitle.toLowerCase() === groupFound.title.toLowerCase()
+        const channelExists = await getDB().collection('channels').findOne(
+            {name: cleanName, groupTitle: groupFound.title}, {collation: {locale: 'en', strength: 2}}
         );
         if (channelExists) {
             return res.status(400).json({message: 'Channel already exists in this group'});
@@ -549,17 +602,9 @@ app.post('/api/channel-requests', async (req, res) => {
     }
 
     try {
-        const [users, groups, channels, requests] = await Promise.all([
-            getDB().collection('users').find().toArray(),
-            getDB().collection('groups').find().toArray(),
-            getDB().collection('channels').find().toArray(),
-            getDB().collection('requests').find().toArray(),
-        ]);
-        const requester = users.find(
-            user => user.username.toLowerCase() === requestedBy.trim().toLowerCase()
-        );
-        const groupFound = groups.find(
-            group => group.title.toLowerCase() === groupTitle.trim().toLowerCase()
+        const requester = req.user;
+        const groupFound = await getDB().collection('groups').findOne(
+            {title: groupTitle.trim()}, {collation: {locale: 'en', strength: 2}}
         );
 
         if (!requester) {
@@ -568,31 +613,30 @@ app.post('/api/channel-requests', async (req, res) => {
         if (!groupFound) {
             return res.status(404).json({message: 'Group not found'});
         }
-        if (!groupFound.members.includes(requester.username)) {
+        if (requester.role === 'superAdmin' || !groupFound.members.includes(requester.username)) {
             return res.status(403).json({message: 'Only group members can request channels'});
+        }
+        if (groupFound.admins.includes(requester.username)) {
+            return res.status(400).json({message: 'Group admins can create channels directly'});
         }
 
         const cleanName = name.trim();
-        const channelExists = channels.some(channel =>
-            channel.name.toLowerCase() === cleanName.toLowerCase() &&
-            channel.groupTitle.toLowerCase() === groupFound.title.toLowerCase()
+        const channelExists = await getDB().collection('channels').findOne(
+            {name: cleanName, groupTitle: groupFound.title}, {collation: {locale: 'en', strength: 2}}
         );
         if (channelExists) {
             return res.status(400).json({message: 'Channel already exists in this group'});
         }
 
-        const duplicateRequest = requests.some(request =>
-            request.type === 'channel' &&
-            request.status === 'pending' &&
-            request.name.toLowerCase() === cleanName.toLowerCase() &&
-            request.groupTitle.toLowerCase() === groupFound.title.toLowerCase()
+        const duplicateRequest = await getDB().collection('requests').findOne(
+            {type: 'channel', status: 'pending', name: cleanName, groupTitle: groupFound.title},
+            {collation: {locale: 'en', strength: 2}}
         );
         if (duplicateRequest) {
             return res.status(400).json({message: 'This channel request is already pending'});
         }
 
         await getDB().collection('requests').insertOne({
-            id: randomUUID(),
             type: 'channel',
             groupTitle: groupFound.title,
             name: cleanName,
@@ -612,19 +656,12 @@ app.get('/api/channel-requests', async (req, res) => {
     const username = String(req.query.username ?? '').trim().toLowerCase();
 
     try {
-        const [groups, requests] = await Promise.all([
-            getDB().collection('groups').find().toArray(),
-            getDB().collection('requests').find().toArray(),
-        ]);
-        const adminGroupTitles = groups
-            .filter(group => group.admins.some(admin => admin.toLowerCase() === username))
-            .map(group => group.title.toLowerCase());
-
-        const pendingRequests = requests.filter(request =>
-            request.type === 'channel' &&
-            request.status === 'pending' &&
-            adminGroupTitles.includes(request.groupTitle.toLowerCase())
-        );
+        const groups = await getDB().collection('groups').find({admins: req.user.username}).toArray();
+        const adminGroupTitles = groups.map(group => group.title);
+        const pendingRequests = req.user.role === 'superAdmin' ? []
+            : await getDB().collection('requests').find({
+                type: 'channel', status: 'pending', groupTitle: {$in: adminGroupTitles},
+            }).toArray();
 
         return res.status(200).json(pendingRequests);
     } catch (error) {
@@ -641,37 +678,31 @@ app.patch('/api/channel-requests/:requestId', async (req, res) => {
     }
 
     try {
-        const [groups, channels, requests] = await Promise.all([
-            getDB().collection('groups').find().toArray(),
-            getDB().collection('channels').find().toArray(),
-            getDB().collection('requests').find().toArray(),
-        ]);
-        const request = requests.find(item =>
-            item.id === req.params.requestId &&
-            item.type === 'channel' &&
-            item.status === 'pending'
-        );
+        if (!/^[a-f0-9]{24}$/.test(req.params.requestId)) {
+            return res.status(400).json({message: 'Invalid request ID'});
+        }
+        const request = await getDB().collection('requests').findOne({
+            _id: new ObjectId(req.params.requestId), type: 'channel', status: 'pending',
+        });
 
         if (!request) {
             return res.status(404).json({message: 'Pending channel request not found'});
         }
 
-        const groupFound = groups.find(group => group.title === request.groupTitle);
+        const groupFound = await getDB().collection('groups').findOne({title: request.groupTitle});
         if (!groupFound) {
             return res.status(404).json({message: 'Group not found'});
         }
 
-        const groupAdmin = groupFound.admins.find(
-            admin => admin.toLowerCase() === String(reviewedBy ?? '').trim().toLowerCase()
-        );
+        const groupAdmin = req.user.role !== 'superAdmin' && groupFound.admins.includes(req.user.username)
+            ? req.user.username : null;
         if (!groupAdmin) {
             return res.status(403).json({message: 'Only this group\'s admins can review the request'});
         }
 
         if (action === 'approve') {
-            const channelExists = channels.some(channel =>
-                channel.name.toLowerCase() === request.name.toLowerCase() &&
-                channel.groupTitle.toLowerCase() === request.groupTitle.toLowerCase()
+            const channelExists = await getDB().collection('channels').findOne(
+                {name: request.name, groupTitle: request.groupTitle}, {collation: {locale: 'en', strength: 2}}
             );
             if (channelExists) {
                 return res.status(400).json({message: 'Channel already exists in this group'});
@@ -685,7 +716,7 @@ app.patch('/api/channel-requests/:requestId', async (req, res) => {
         }
 
         await getDB().collection('requests').updateOne(
-            { id: request.id },
+            { _id: request._id },
             {
                 $set: {
                     status: action === 'approve' ? 'approved' : 'rejected',
@@ -714,21 +745,9 @@ app.get('/api/channels', async (_req, res) => {
     }
 });
 
-app.get('/api/health', async (_req, res) => {
-    try {
-        await checkDatabaseHealth();
-        return res.status(200).json({server: 'ok', database: 'ok'});
-    } catch (error) {
-        console.error('Database health check failed:', error);
-        return res.status(503).json({server: 'ok', database: 'unavailable'});
-    }
-});
-
 async function startServer() {
     try {
         await connectDB();
-        await checkDatabaseHealth();
-        await seedDatabase();
         await ensureGeneralChat();
 
         httpServer.listen(port, () => {

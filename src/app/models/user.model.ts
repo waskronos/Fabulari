@@ -13,6 +13,7 @@ export interface LoginRequest {
 }
 
 export interface ProfileRequest {
+  profileImage?: string;
   firstName: string;
   lastName: string;
   email: string;
@@ -21,6 +22,8 @@ export interface ProfileRequest {
 }
 
 export interface CurrentUser {
+  profileImage?: string;
+  sessionToken?: string;
   username: string;
   firstName: string;
   lastName: string;
@@ -28,6 +31,12 @@ export interface CurrentUser {
   dateOfBirth?: string;
   age: number;
   role: 'user' | 'superAdmin';
+}
+
+export interface PasswordRequest {
+  currentPassword: string;
+  newPassword: string;
+  confirmPassword: string;
 }
 
 export interface ApiMessage {

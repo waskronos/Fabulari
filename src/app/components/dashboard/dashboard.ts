@@ -30,6 +30,10 @@ export class Dashboard implements OnInit {
   profileEmail = '';
   profileDateOfBirth = '';
   currentPassword = '';
+  profileImage = '';
+  passwordCurrent = '';
+  newPassword = '';
+  confirmPassword = '';
 
   ngOnInit() {
     const storedUser = localStorage.getItem('currentUser');
@@ -44,6 +48,7 @@ export class Dashboard implements OnInit {
       this.profileLastName = this.currentuser.lastName;
       this.profileEmail = this.currentuser.email;
       this.profileDateOfBirth = this.currentuser.dateOfBirth || '';
+      this.profileImage = this.currentuser.profileImage || '';
       this.loadGroups(); 
       this.loadChannels();
       if (!this.isHome) {
@@ -67,6 +72,22 @@ export class Dashboard implements OnInit {
   private groupService = inject(Group);
   private userService = inject(User);
 
+  // Read a small image so the existing profile request can save it to MongoDB.
+  selectProfileImage(event: Event) {
+    const input = event.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+    if (!['image/png', 'image/jpeg', 'image/gif'].includes(file.type) || file.size > 2 * 1024 * 1024) {
+      input.value = '';
+      this.showFeedback('Use a PNG, JPEG or GIF image up to 2 MB.', 'error');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => this.profileImage = String(reader.result);
+    reader.onerror = () => this.showFeedback('Image could not be opened.', 'error');
+    reader.readAsDataURL(file);
+  }
+
   saveProfile() {
     this.userService.updateProfile(this.currentuser.username, {
       firstName: this.profileFirstName,
@@ -74,6 +95,7 @@ export class Dashboard implements OnInit {
       email: this.profileEmail,
       dateOfBirth: this.profileDateOfBirth,
       currentPassword: this.currentPassword,
+      profileImage: this.profileImage,
     }).subscribe({
       next: (response) => {
         this.currentuser = response.user;
@@ -84,6 +106,27 @@ export class Dashboard implements OnInit {
       error: (error: HttpErrorResponse) => {
         this.showApiError(error, 'Profile could not be saved.');
       },
+    });
+  }
+
+  changePassword() {
+    if (this.newPassword !== this.confirmPassword) {
+      this.showFeedback('New passwords do not match.', 'error');
+      return;
+    }
+    this.userService.changePassword(this.currentuser.username, {
+      currentPassword: this.passwordCurrent,
+      newPassword: this.newPassword,
+      confirmPassword: this.confirmPassword,
+    }).subscribe({
+      next: response => {
+        this.passwordCurrent = '';
+        this.newPassword = '';
+        this.confirmPassword = '';
+        this.currentPassword = '';
+        this.showFeedback(response.message, 'success');
+      },
+      error: (error: HttpErrorResponse) => this.showApiError(error, 'Password could not be changed.'),
     });
   }
 
@@ -318,11 +361,24 @@ export class Dashboard implements OnInit {
   }
 
   logout() {
-    localStorage.removeItem('currentUser');
-    this.router.navigate(['/']);
+    this.userService.logout().subscribe({
+      next: () => {
+        localStorage.removeItem('currentUser');
+        this.router.navigate(['/']);
+      },
+      error: () => {
+        localStorage.removeItem('currentUser');
+        this.router.navigate(['/']);
+      },
+    });
   }
 
   private showApiError(error: HttpErrorResponse, fallbackMessage: string) {
+    if (error.status === 401) {
+      localStorage.removeItem('currentUser');
+      this.router.navigate(['/login']);
+      return;
+    }
     this.showFeedback(error.error?.message ?? fallbackMessage, 'error');
   }
 

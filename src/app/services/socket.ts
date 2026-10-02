@@ -1,7 +1,6 @@
 import { Injectable } from '@angular/core';
-import { Observable } from 'rxjs';
 import { io, Socket } from 'socket.io-client';
-import { ChatMessage, JoinChannelData } from '../models/chat.model';
+import { ChatMessage, JoinChannelData, MessageInput } from '../models/chat.model';
 
 const SERVER_URL = 'http://localhost:3000';
 
@@ -13,7 +12,8 @@ export class SocketService {
 
   initSocket() {
     if (!this.socket) {
-      this.socket = io(SERVER_URL);
+      const user = JSON.parse(localStorage.getItem('currentUser') || 'null');
+      this.socket = io(SERVER_URL, {auth: {token: user?.sessionToken}, autoConnect: false});
     }
   }
 
@@ -21,47 +21,54 @@ export class SocketService {
     this.socket?.emit('join-channel', channel);
   }
 
-  sendMessage(message: string) {
-    this.socket?.emit('send-message', message);
+  sendMessage(message: MessageInput, callback: (success: boolean) => void) {
+    this.socket?.emit('send-message', message, callback);
   }
 
-  getMessages() {
-    return new Observable<ChatMessage>(observer => {
-      const messageHandler = (message: ChatMessage) => observer.next(message);
-      this.socket?.on('new-message', messageHandler);
-
-      return () => this.socket?.off('new-message', messageHandler);
-    });
+  connect() {
+    this.socket?.connect();
   }
 
-  getHistory() {
-    return new Observable<ChatMessage[]>(observer => {
-      const historyHandler = (messages: ChatMessage[]) => observer.next(messages);
-      this.socket?.on('chat-history', historyHandler);
-
-      return () => this.socket?.off('chat-history', historyHandler);
-    });
+  onMessage(callback: (message: ChatMessage) => void) {
+    this.socket?.on('new-message', callback);
   }
 
-  getJoined() {
-    return new Observable<void>(observer => {
-      const joinedHandler = () => observer.next();
-      this.socket?.on('channel-joined', joinedHandler);
-
-      return () => this.socket?.off('channel-joined', joinedHandler);
-    });
+  onHistory(callback: (messages: ChatMessage[]) => void) {
+    this.socket?.on('chat-history', callback);
   }
 
-  getErrors() {
-    return new Observable<string>(observer => {
-      const errorHandler = (message: string) => observer.next(message);
-      this.socket?.on('chat-error', errorHandler);
+  onConnected(callback: () => void) {
+    this.socket?.on('connect', callback);
+  }
 
-      return () => this.socket?.off('chat-error', errorHandler);
-    });
+  onJoined(callback: () => void) {
+    this.socket?.on('channel-joined', callback);
+  }
+
+  onLeft(callback: () => void) {
+    this.socket?.on('channel-left', callback);
+    this.socket?.on('disconnect', callback);
+  }
+
+  onError(callback: (message: string) => void) {
+    this.socket?.on('chat-error', callback);
+    this.socket?.on('connect_error', (error: Error) => callback(error.message));
+  }
+
+  onNotification(callback: (message: string) => void) {
+    this.socket?.on('room-notification', callback);
+  }
+
+  deleteMessage(id: string) {
+    this.socket?.emit('delete-message', id);
+  }
+
+  onDeleted(callback: (id: string) => void) {
+    this.socket?.on('message-deleted', callback);
   }
 
   disconnect() {
+    this.socket?.removeAllListeners();
     this.socket?.disconnect();
     this.socket = undefined;
   }

@@ -12,17 +12,31 @@
   }
 
   @if (channelJoined()) {
+    @if (notification()) {
+      <div class="room-notification" role="status">{{ notification() }}</div>
+    }
     <section class="messages" aria-live="polite">
-      @for (message of messages; track $index) {
+      @for (message of messages(); track message._id) {
         <article class="message">
           <div class="message-details">
+            @if (message.profileImage) {
+              <img class="message-avatar" [src]="message.profileImage" [alt]="message.username + ' profile image'" />
+            } @else {
+              <span class="message-avatar initials">{{ message.username[0].toUpperCase() }}</span>
+            }
             <strong>{{ message.username }}</strong>
             @if (message.isModerator) {
               <span class="moderator">MOD</span>
             }
             <time>{{ message.timestamp | date:'shortTime' }}</time>
+            @if (message.username === currentUser.username) {
+              <button class="delete-message" type="button" (click)="deleteMessage(message)">Delete</button>
+            }
           </div>
-          <p>{{ message.text }}</p>
+          @if (message.text) { <p>{{ message.text }}</p> }
+          @if (message.image) {
+            <img class="chat-image" [src]="message.image" [alt]="'Image shared by ' + message.username" />
+          }
         </article>
       } @empty {
         <p class="empty-message">No messages yet. Start the conversation.</p>
@@ -30,6 +44,14 @@
     </section>
 
     <form class="message-form" (ngSubmit)="sendMessage()">
+      @if (messageImage()) {
+        <div class="attachment-preview">
+          <img [src]="messageImage()" alt="Image ready to send" />
+          <button type="button" (click)="removeImage()" [disabled]="sendingMessage() || readingImage()">Remove image</button>
+        </div>
+      }
+      <label class="image-label" for="messageImage">Attach image · PNG, JPEG or GIF, up to 2 MB</label>
+      <input id="messageImage" type="file" accept="image/png,image/jpeg,image/gif" (change)="selectImage($event)" [disabled]="sendingMessage() || readingImage()" />
       <label for="messageText">Message #{{ channelName }}</label>
       <div>
         <input
@@ -38,8 +60,10 @@
           type="text"
           [(ngModel)]="messageText"
           autocomplete="off"
+          maxlength="2000"
+          [disabled]="sendingMessage()"
         />
-        <button type="submit">Send</button>
+        <button type="submit" [disabled]="sendingMessage() || readingImage()">{{ sendingMessage() ? 'Sending...' : 'Send' }}</button>
       </div>
     </form>
   } @else if (!errorMessage()) {

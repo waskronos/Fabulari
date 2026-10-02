@@ -8,13 +8,13 @@ export interface GroupRequestData {
 }
 
 export interface PendingGroupRequest {
-  id: string;
+  _id: string;
   type: 'group';
   title: string;
   description: string;
   minimumAge: number;
   requestedBy: string;
-  status: 'pending';
+  status: 'pending' | 'approved' | 'rejected';
   createdAt: string;
 }
 
@@ -25,7 +25,7 @@ export interface ChannelRequestData {
 }
 
 export interface PendingChannelRequest {
-  id: string;
+  _id: string;
   type: 'channel';
   groupTitle: string;
   name: string;

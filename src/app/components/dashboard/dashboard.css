@@ -493,3 +493,9 @@ p {
     flex-wrap: wrap;
   }
 }
+
+.profile-image { object-fit: cover; }
+.image-picker { display: grid; gap: 8px; }
+.image-preview { width: 64px; height: 64px; border-radius: 50%; object-fit: cover; }
+.image-picker small { color: #aeb1bd; }
+input[readonly] { opacity: 0.65; }

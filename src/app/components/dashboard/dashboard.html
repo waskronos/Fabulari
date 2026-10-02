@@ -2,7 +2,11 @@
   <div class="dashboard-shell">
     <aside class="sidebar">
       <div class="sidebar-profile">
-        <div class="avatar">{{ getInitials() }}</div>
+        @if (currentuser.profileImage) {
+          <img class="avatar profile-image" [src]="currentuser.profileImage" alt="Your profile image" />
+        } @else {
+          <div class="avatar">{{ getInitials() }}</div>
+        }
         <div>
           <strong>{{ currentuser.firstName }} {{ currentuser.lastName }}</strong>
           <span>&#64;{{ currentuser.username }}</span>
@@ -65,7 +69,11 @@
           </div>
 
           <div class="profile-details">
-            <div class="avatar avatar-large">{{ getInitials() }}</div>
+            @if (currentuser.profileImage) {
+              <img class="avatar avatar-large profile-image" [src]="currentuser.profileImage" alt="Your profile image" />
+            } @else {
+              <div class="avatar avatar-large">{{ getInitials() }}</div>
+            }
             <div>
               <strong>{{ currentuser.firstName }} {{ currentuser.lastName }}</strong>
               <span>&#64;{{ currentuser.username }}</span>
@@ -78,15 +86,23 @@
         </section>
         <section class="content-section">
           <h2>Edit profile</h2>
-          <p>Your username stays the same so your groups and messages remain linked to your account.</p>
+          <p>Your username and email stay the same. Add a profile image to appear beside your chat messages.</p>
           <form (ngSubmit)="saveProfile()">
             <div class="form-grid">
+              <label for="profileImage">Profile image</label>
+              <div class="image-picker">
+                @if (profileImage) {
+                  <img class="image-preview" [src]="profileImage" alt="Selected profile image" />
+                }
+                <input id="profileImage" type="file" accept="image/png,image/jpeg,image/gif" (change)="selectProfileImage($event)" />
+                <small>PNG, JPEG or GIF · up to 2 MB</small>
+              </div>
               <label for="profileFirstName">First name</label>
               <input id="profileFirstName" name="firstName" [(ngModel)]="profileFirstName" required maxlength="80" />
               <label for="profileLastName">Last name</label>
               <input id="profileLastName" name="lastName" [(ngModel)]="profileLastName" required maxlength="80" />
               <label for="profileEmail">Email</label>
-              <input id="profileEmail" name="email" type="email" [(ngModel)]="profileEmail" required />
+              <input id="profileEmail" name="email" type="email" [(ngModel)]="profileEmail" readonly />
               <label for="profileDateOfBirth">Date of birth</label>
               <input id="profileDateOfBirth" name="dateOfBirth" type="date" [(ngModel)]="profileDateOfBirth" required />
               <label for="currentPassword">Current password</label>
@@ -104,6 +120,24 @@
         </section>
       }
 
+      @if (!isHome) {
+        <section class="content-section">
+          <h2>Change password</h2>
+          <p>Use 8–72 characters with at least one uppercase letter.</p>
+          <form (ngSubmit)="changePassword()">
+            <div class="form-grid">
+              <label for="passwordCurrent">Current password</label>
+              <input id="passwordCurrent" name="passwordCurrent" type="password" autocomplete="current-password" [(ngModel)]="passwordCurrent" required />
+              <label for="newPassword">New password</label>
+              <input id="newPassword" name="newPassword" type="password" autocomplete="new-password" [(ngModel)]="newPassword" required minlength="8" maxlength="72" />
+              <label for="confirmPassword">Confirm new password</label>
+              <input id="confirmPassword" name="confirmPassword" type="password" autocomplete="new-password" [(ngModel)]="confirmPassword" required />
+            </div>
+            <button type="submit">Change password</button>
+          </form>
+        </section>
+      }
+
       @if (currentuser.role === 'superAdmin') {
         <section class="content-section" id="admin-workspace">
           <div class="section-heading">
@@ -115,7 +149,7 @@
           </div>
 
           <div class="card-grid">
-            @for (request of groupRequests(); track request.id) {
+            @for (request of groupRequests(); track request._id) {
               <article class="request-card">
                 <h3>{{ request.title }}</h3>
                 <p>{{ request.description }}</p>
@@ -124,8 +158,8 @@
                 </p>
                 <p>Minimum age: {{ request.minimumAge }}</p>
                 <div class="button-row">
-                  <button (click)="reviewGroupRequest(request.id, 'approve')">Approve</button>
-                  <button class="danger-button" (click)="reviewGroupRequest(request.id, 'reject')">Reject</button>
+                  <button (click)="reviewGroupRequest(request._id, 'approve')">Approve</button>
+                  <button class="danger-button" (click)="reviewGroupRequest(request._id, 'reject')">Reject</button>
                 </div>
               </article>
             } @empty {
@@ -280,7 +314,7 @@
           <section class="content-section">
             <h2>Your group requests</h2>
             <div class="card-grid">
-              @for (request of groupRequests(); track request.id) {
+              @for (request of groupRequests(); track request._id) {
                 <article class="request-card">
                   <h3>{{ request.title }}</h3>
                   <p>{{ request.description }}</p>
@@ -358,12 +392,12 @@
 
               <details>
                 <summary>Pending channel requests ({{ channelRequests().length }})</summary>
-                @for (request of channelRequests(); track request.id) {
+                @for (request of channelRequests(); track request._id) {
                   <div class="request-line">
                     <span># {{ request.name }} in {{ request.groupTitle }} from {{ request.requestedBy }}</span>
                     <div class="button-row">
-                      <button (click)="reviewChannelRequest(request.id, 'approve')">Approve</button>
-                      <button class="danger-button" (click)="reviewChannelRequest(request.id, 'reject')">Reject</button>
+                      <button (click)="reviewChannelRequest(request._id, 'approve')">Approve</button>
+                      <button class="danger-button" (click)="reviewChannelRequest(request._id, 'reject')">Reject</button>
                     </div>
                   </div>
                 } @empty {
